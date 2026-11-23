@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <polygon points="512,132 841,322 512,512 183,322" fill="#8fbaff"/>
+  <polygon points="183,322 512,512 512,892 183,702" fill="#3f78e6"/>
+  <polygon points="512,512 841,322 841,702 512,892" fill="#2a4fa8"/>
+  <g stroke="#0d1a33" stroke-opacity="0.45" stroke-width="10" stroke-linecap="round">
+    <line x1="402.33" y1="195.33" x2="731.33" y2="385.33"/>
+    <line x1="292.67" y1="258.67" x2="621.67" y2="448.67"/>
+    <line x1="621.67" y1="195.33" x2="292.67" y2="385.33"/>
+    <line x1="731.33" y1="258.67" x2="402.33" y2="448.67"/>
+    <line x1="292.67" y1="385.33" x2="292.67" y2="765.33"/>
+    <line x1="402.33" y1="448.67" x2="402.33" y2="828.67"/>
+    <line x1="183" y1="448.67" x2="512" y2="638.67"/>
+    <line x1="183" y1="575.33" x2="512" y2="765.33"/>
+    <line x1="621.67" y1="448.67" x2="621.67" y2="828.67"/>
+    <line x1="731.33" y1="385.33" x2="731.33" y2="765.33"/>
+    <line x1="512" y1="638.67" x2="841" y2="448.67"/>
+    <line x1="512" y1="765.33" x2="841" y2="575.33"/>
+  </g>
+  <polygon points="512,132 841,322 841,702 512,892 183,702 183,322" fill="none" stroke="#0d1a33" stroke-opacity="0.6" stroke-width="14" stroke-linejoin="round"/>
+  <line x1="512" y1="512" x2="512" y2="892" stroke="#0d1a33" stroke-opacity="0.6" stroke-width="14"/>
+  <line x1="183" y1="322" x2="512" y2="512" stroke="#0d1a33" stroke-opacity="0.6" stroke-width="14"/>
+  <line x1="841" y1="322" x2="512" y2="512" stroke="#0d1a33" stroke-opacity="0.6" stroke-width="14"/>
+</svg>
