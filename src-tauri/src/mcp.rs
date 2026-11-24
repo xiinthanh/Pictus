@@ -29,6 +29,16 @@ const BIND_RETRIES: u32 = 10;
 const BIND_RETRY_DELAY: Duration = Duration::from_millis(100);
 
 type Pending = Arc<Mutex<HashMap<u64, Sender<(u16, String)>>>>;
+type HttpResponse = Response<std::io::Cursor<Vec<u8>>>;
+
+/// What the server thread needs to answer requests.
+struct Relay {
+    app: AppHandle,
+    token: String,
+    should_stop: Arc<AtomicBool>,
+    pending: Pending,
+    next_id: Arc<AtomicU64>,
+}
 
 struct Run {
     server: Arc<Server>,
@@ -71,10 +81,16 @@ pub fn mcp_start(app: AppHandle, state: State<McpState>, port: u16, token: Strin
     stop(&state)?;
     let server = Arc::new(bind(port)?);
     let should_stop = Arc::new(AtomicBool::new(false));
+    let relay = Relay {
+        app,
+        token,
+        should_stop: should_stop.clone(),
+        pending: state.pending.clone(),
+        next_id: state.next_id.clone(),
+    };
     let thread = {
-        let (server, should_stop) = (server.clone(), should_stop.clone());
-        let (pending, next_id) = (state.pending.clone(), state.next_id.clone());
-        thread::spawn(move || serve(app, server, token, should_stop, pending, next_id))
+        let server = server.clone();
+        thread::spawn(move || serve(&server, &relay))
     };
     *state.run.lock().unwrap() = Some(Run { server, should_stop, thread });
     Ok(())
@@ -122,25 +138,25 @@ fn stop(state: &McpState) -> Result<(), String> {
     run.thread.join().map_err(|_| "The AI connection thread crashed".to_string())
 }
 
-fn serve(app: AppHandle, server: Arc<Server>, token: String, should_stop: Arc<AtomicBool>, pending: Pending, next_id: Arc<AtomicU64>) {
+fn serve(server: &Server, relay: &Relay) {
     loop {
         let mut req = match server.recv() {
             Ok(req) => req,
             Err(e) => {
                 // `unblock()` from stop() also lands here; only an unexpected end is reported.
-                if !should_stop.load(Ordering::SeqCst) {
+                if !relay.should_stop.load(Ordering::SeqCst) {
                     let error = format!("the server stopped accepting connections: {e}");
-                    if let Err(emit_err) = app.emit_to("main", "mcp-stopped", McpStopped { error }) {
+                    if let Err(emit_err) = relay.app.emit_to("main", "mcp-stopped", McpStopped { error }) {
                         eprintln!("Pictus MCP: server stopped ({e}) and the window could not be told: {emit_err}");
                     }
                 }
                 return;
             }
         };
-        let response = if should_stop.load(Ordering::SeqCst) {
+        let response = if relay.should_stop.load(Ordering::SeqCst) {
             text(503, "Pictus AI connection is off")
         } else {
-            handle(&app, &mut req, &token, &should_stop, &pending, &next_id)
+            handle(relay, &mut req)
         };
         if let Err(e) = req.respond(response) {
             eprintln!("Pictus MCP: could not send a response (client disconnected?): {e}");
@@ -148,33 +164,36 @@ fn serve(app: AppHandle, server: Arc<Server>, token: String, should_stop: Arc<At
     }
 }
 
-fn handle(
-    app: &AppHandle,
-    req: &mut Request,
-    token: &str,
-    should_stop: &AtomicBool,
-    pending: &Pending,
-    next_id: &AtomicU64,
-) -> Response<std::io::Cursor<Vec<u8>>> {
+fn handle(relay: &Relay, req: &mut Request) -> HttpResponse {
+    match check_request(req, &relay.token) {
+        Ok(body) => forward(relay, req, body),
+        Err(rejection) => rejection,
+    }
+}
+
+/// The request body, or the response that rejects the request.
+fn check_request(req: &mut Request, token: &str) -> Result<String, HttpResponse> {
     if req.url().split('?').next() != Some("/mcp") {
-        return text(404, "Not found");
+        return Err(text(404, "Not found"));
     }
     if let Err(code) = authorize(header(req, "Origin"), header(req, "Authorization"), token) {
-        return text(code, if code == 403 { "Forbidden" } else { "Unauthorized" });
+        return Err(text(code, if code == 403 { "Forbidden" } else { "Unauthorized" }));
     }
     if *req.method() != Method::Post {
-        return text(405, "Method not allowed").with_header(hdr("Allow", "POST"));
+        return Err(text(405, "Method not allowed").with_header(hdr("Allow", "POST")));
     }
     let declared_len = req.body_length();
-    let body = match read_body(req.as_reader(), declared_len) {
-        Ok(body) => body,
-        Err(413) => return text(413, &format!("Request too large (limit {} MB)", MAX_BODY / (1024 * 1024))),
-        Err(code) => return text(code, "Body must be UTF-8 JSON"),
-    };
+    read_body(req.as_reader(), declared_len).map_err(|code| match code {
+        413 => text(413, &format!("Request too large (limit {} MB)", MAX_BODY / (1024 * 1024))),
+        _ => text(code, "Body must be UTF-8 JSON"),
+    })
+}
 
-    let id = next_id.fetch_add(1, Ordering::SeqCst);
+/// Hands the request to the window and waits for its answer.
+fn forward(relay: &Relay, req: &Request, body: String) -> HttpResponse {
+    let id = relay.next_id.fetch_add(1, Ordering::SeqCst);
     let (tx, rx) = mpsc::channel();
-    pending.lock().unwrap().insert(id, tx);
+    relay.pending.lock().unwrap().insert(id, tx);
     let event = McpRequest {
         id,
         body,
@@ -183,8 +202,8 @@ fn handle(
         name: header(req, "Mcp-Name").map(str::to_owned),
         expires_at: unix_ms(SystemTime::now() + ANSWER_TIMEOUT),
     };
-    if app.emit_to("main", "mcp-request", event).is_err() {
-        pending.lock().unwrap().remove(&id);
+    if relay.app.emit_to("main", "mcp-request", event).is_err() {
+        relay.pending.lock().unwrap().remove(&id);
         return text(503, "Pictus window is not available");
     }
 
@@ -192,11 +211,17 @@ fn handle(
     let answer = loop {
         match rx.recv_timeout(POLL) {
             Ok(a) => break Some(a),
-            Err(RecvTimeoutError::Timeout) if !should_stop.load(Ordering::SeqCst) && started.elapsed() < ANSWER_TIMEOUT => {}
+            Err(RecvTimeoutError::Timeout)
+                if !relay.should_stop.load(Ordering::SeqCst) && started.elapsed() < ANSWER_TIMEOUT => {}
             Err(_) => break None,
         }
     };
-    pending.lock().unwrap().remove(&id);
+    relay.pending.lock().unwrap().remove(&id);
+    to_response(answer)
+}
+
+/// The window's answer as HTTP, or 504 when it never came.
+fn to_response(answer: Option<(u16, String)>) -> HttpResponse {
     match answer {
         Some((status, body)) if body.is_empty() => Response::from_data(Vec::new()).with_status_code(status),
         Some((status, body)) => Response::from_data(body.into_bytes())
@@ -251,7 +276,7 @@ fn hdr(name: &str, value: &str) -> Header {
     Header::from_bytes(name.as_bytes(), value.as_bytes()).expect("static header")
 }
 
-fn text(status: u16, msg: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+fn text(status: u16, msg: &str) -> HttpResponse {
     Response::from_data(msg.as_bytes().to_vec())
         .with_status_code(status)
         .with_header(hdr("Content-Type", "text/plain; charset=utf-8"))
