@@ -1,108 +1,107 @@
-// Connects the Rust MCP relay to the app: listens for `mcp-request` events,
-// answers them through protocol.ts, and keeps the on/off settings.
+// Connects the Rust MCP relay to the app: listens for `mcp-request` events and
+// answers them through protocol.ts.
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { newModel } from '$lib/actions';
 import { errorText } from '$lib/platform/files';
 import { app, editor } from '$lib/state/app.svelte';
-import { handleHttp, type HttpIn, type HttpOut } from './protocol';
+import { handleHttp, type HttpIn } from './protocol';
 import { TOOLS, type ToolCtx } from './tools';
 
 export const DEFAULT_PORT = 47821;
-const KEY = 'pictus.mcp';
-
-export interface McpSettings {
-  enabled: boolean;
-  port: number;
-  token: string;
-}
+const ERROR_FLASH_MS = 8000;
 
 interface McpEvent extends HttpIn {
   id: number;
 }
 
-export function newToken(): string {
-  const b = new Uint8Array(32);
-  crypto.getRandomValues(b);
-  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
-}
-
-export function loadSettings(): McpSettings {
-  try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (v && typeof v.token === 'string' && v.token.length >= 32 && Number.isInteger(v.port)) {
-      return { enabled: v.enabled === true, port: v.port, token: v.token };
-    }
-  } catch {
-    /* fall through to defaults */
-  }
-  return { enabled: false, port: DEFAULT_PORT, token: newToken() };
-}
-
-export function saveSettings(s: McpSettings): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(s));
-  } catch {
-    /* storage unavailable — settings just won't persist */
-  }
-}
-
 const ctx: ToolCtx = {
   editor,
-  info: () => ({ name: app.docName, dirty: app.dirty, layer: app.layer, color: app.color }),
-  newModel,
-  highlight: (cells) => (app.highlight = cells),
-  snapshot: () => null, // milestone M4
   notify: (tool) => app.flash(`AI: ${tool}`),
 };
 
-let unlisten: UnlistenFn | null = null;
+let unlisteners: UnlistenFn[] = [];
 /** Answers strictly one at a time, in arrival order. */
-let queue: Promise<void> = Promise.resolve();
+let answers: Promise<void> = Promise.resolve();
+/** Start/stop steps run one after another, so two starts can't both add listeners. */
+let lifecycle: Promise<void> = Promise.resolve();
 
-export async function startMcp(port: number, token: string): Promise<void> {
-  await stopMcp();
-  unlisten = await listen<McpEvent>('mcp-request', (e) => {
-    queue = queue.then(() => answer(e.payload));
-  });
-  try {
-    await invoke('mcp_start', { port, token });
-  } catch (e) {
-    unlisten();
-    unlisten = null;
-    throw new Error(errorText(e), { cause: e });
-  }
-  app.mcpOn = true;
+function serialize(step: () => Promise<void>): Promise<void> {
+  const run = lifecycle.then(step);
+  // The caller gets the error from `run`; the chain itself must survive it.
+  lifecycle = run.catch(() => undefined);
+  return run;
 }
 
-export async function stopMcp(): Promise<void> {
-  app.mcpOn = false;
-  await invoke('mcp_stop').catch(() => {});
-  unlisten?.();
-  unlisten = null;
+export function startMcp(port: number, token: string): Promise<void> {
+  return serialize(async () => {
+    await stopNow();
+    unlisteners = [
+      await listen<McpEvent>('mcp-request', (e) => {
+        // A failure must not break the chain, or every later request would hang.
+        answers = answers
+          .then(() => answer(e.payload))
+          .catch((err) => console.error(`Pictus MCP: request ${e.payload.id} failed: ${errorText(err)}`));
+      }),
+      await listen<{ error: string }>('mcp-stopped', (e) => {
+        app.flash(`AI connection stopped: ${e.payload.error}`, ERROR_FLASH_MS);
+        void stopMcp().catch(reportStopError);
+      }),
+    ];
+    try {
+      await invoke('mcp_start', { port, token });
+    } catch (e) {
+      removeListeners();
+      throw new Error(errorText(e), { cause: e });
+    }
+  });
+}
+
+export function stopMcp(): Promise<void> {
+  return serialize(stopNow);
+}
+
+async function stopNow(): Promise<void> {
+  try {
+    await invoke('mcp_stop');
+  } finally {
+    removeListeners();
+  }
+}
+
+function removeListeners(): void {
+  for (const off of unlisteners) off();
+  unlisteners = [];
 }
 
 async function answer(ev: McpEvent): Promise<void> {
-  let res: HttpOut;
+  const res = await handleHttp(ev, TOOLS, ctx);
   try {
-    res = await handleHttp(ev, TOOLS, ctx);
+    await invoke('mcp_respond', { id: ev.id, status: res.status, body: res.body });
   } catch (e) {
-    res = {
-      status: 500,
-      body: JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message: errorText(e) } }),
-    };
+    // The relay already gave up on this request (timeout or shutdown); nothing left to answer.
+    console.warn(`Pictus MCP: could not answer request ${ev.id}: ${errorText(e)}`);
   }
-  await invoke('mcp_respond', { id: ev.id, status: res.status, body: res.body }).catch(() => {});
 }
 
-/** Starts the connection at launch if the user left it on (or a dev token is set). */
-export async function startFromSettings(): Promise<void> {
+function reportStopError(e: unknown): void {
+  app.flash(`Could not stop the AI connection: ${errorText(e)}`, ERROR_FLASH_MS);
+}
+
+/**
+ * Dev only: `VITE_PICTUS_MCP_TOKEN=<token> pnpm tauri dev` turns the
+ * connection on at launch.
+ */
+export async function startAtLaunch(): Promise<void> {
   const devToken = import.meta.env.DEV ? (import.meta.env.VITE_PICTUS_MCP_TOKEN as string | undefined) : undefined;
-  const s = loadSettings();
-  if (!s.enabled && !devToken) return;
+  if (!devToken) return;
   try {
-    await startMcp(s.port, devToken ?? s.token);
+    await startMcp(DEFAULT_PORT, devToken);
   } catch (e) {
-    app.flash(`AI connection failed: ${errorText(e)}`, 8000);
+    app.flash(`AI connection failed: ${errorText(e)}`, ERROR_FLASH_MS);
   }
+}
+
+/** For page teardown (including dev hot reload), so no stale listener answers twice. */
+export function stopAtTeardown(): void {
+  stopMcp().catch(reportStopError);
 }

@@ -18,12 +18,28 @@ export const INSTRUCTIONS = [
   'Every tool call is one undo step for the user. One voxel prints as voxelSize millimetres.',
 ].join('\n');
 
+/**
+ * A request this close to the relay's deadline is refused instead of run: the
+ * relay answers 504 at the deadline, and a tool that still ran would apply an
+ * edit the client believes failed (and may retry).
+ */
+export const START_MARGIN_MS = 5000;
+
 /** What the Rust relay forwards: the body plus the MCP headers it saw. */
 export interface HttpIn {
   body: string;
   protocolVersion?: string | null;
   method?: string | null;
   name?: string | null;
+  /** Unix ms at which the relay stops waiting for the answer. */
+  expiresAt?: number | null;
+}
+
+interface Rpc {
+  method: string;
+  id: Id;
+  isNotification: boolean;
+  params: Record<string, unknown>;
 }
 
 export interface HttpOut {
@@ -60,55 +76,71 @@ export function decodeHeader(v: string | null | undefined): string | null {
   }
 }
 
-export async function handleHttp(req: HttpIn, tools: Tool[], ctx: ToolCtx): Promise<HttpOut> {
+export async function handleHttp(req: HttpIn, tools: Tool[], ctx: ToolCtx, now = Date.now()): Promise<HttpOut> {
   let msg: unknown;
   try {
     msg = JSON.parse(req.body);
-  } catch {
-    return fail(400, null, -32700, 'Parse error');
+  } catch (e) {
+    return fail(400, null, -32700, `Parse error: ${errorMessage(e)}`);
   }
   if (!isObject(msg) || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') {
     const id = isObject(msg) ? toId(msg.id) : null;
     return fail(400, id, -32600, 'Invalid request: expected a single JSON-RPC 2.0 request or notification');
   }
-  const method = msg.method;
-  const isNotification = !('id' in msg);
-  const id = toId(msg.id);
-  const params = isObject(msg.params) ? msg.params : {};
-  const meta = isObject(params._meta) ? params._meta : {};
-  const version = meta[META_VERSION];
-
-  if (typeof version === 'string') {
-    // ---- modern: stateless, versioned per request
-    if (!MODERN_VERSIONS.includes(version)) {
-      return fail(400, id, -32022, 'Unsupported protocol version', { supported: MODERN_VERSIONS, requested: version });
-    }
-    if (isNotification) return accepted;
-    const mismatch = headerMismatch(req, version, method, params);
-    if (mismatch) return fail(400, id, -32020, `Header mismatch: ${mismatch}`);
-    const complete = (result: object) => out(200, id, { result: { resultType: 'complete', ...result } });
-    switch (method) {
-      case 'server/discover':
-        return complete({
-          supportedVersions: MODERN_VERSIONS,
-          capabilities: { tools: {} },
-          _meta: { 'io.modelcontextprotocol/serverInfo': SERVER_INFO },
-          instructions: INSTRUCTIONS,
-        });
-      case 'ping':
-        return complete({});
-      case 'tools/list':
-        return complete({ tools: tools.map(definition) });
-      case 'tools/call': {
-        const r = await callTool(params, tools, ctx);
-        return 'error' in r ? fail(200, id, r.error.code, r.error.message) : complete(r.result);
-      }
-      default:
-        return fail(404, id, -32601, `Method not found: ${method}`);
-    }
+  const rpc: Rpc = {
+    method: msg.method,
+    id: toId(msg.id),
+    isNotification: !('id' in msg),
+    params: isObject(msg.params) ? msg.params : {},
+  };
+  if (req.expiresAt != null && now > req.expiresAt - START_MARGIN_MS) {
+    return fail(503, rpc.id, -32603, 'Pictus was busy and the request expired before it could run. Try again.');
   }
+  const meta = isObject(rpc.params._meta) ? rpc.params._meta : {};
+  const version = meta[META_VERSION];
+  try {
+    return typeof version === 'string'
+      ? await modern(req, rpc, version, tools, ctx)
+      : await legacy(req, rpc, tools, ctx);
+  } catch (e) {
+    return fail(500, rpc.id, -32603, `Internal error: ${errorMessage(e)}`);
+  }
+}
 
-  // ---- legacy: initialize handshake; errors use HTTP 200 (a legacy 404 means "session expired")
+/** Modern era: stateless, versioned per request, headers must match the body. */
+async function modern(req: HttpIn, rpc: Rpc, version: string, tools: Tool[], ctx: ToolCtx): Promise<HttpOut> {
+  const { method, id, isNotification, params } = rpc;
+  if (!MODERN_VERSIONS.includes(version)) {
+    return fail(400, id, -32022, 'Unsupported protocol version', { supported: MODERN_VERSIONS, requested: version });
+  }
+  if (isNotification) return accepted;
+  const mismatch = headerMismatch(req, version, method, params);
+  if (mismatch) return fail(400, id, -32020, `Header mismatch: ${mismatch}`);
+  const complete = (result: object) => out(200, id, { result: { resultType: 'complete', ...result } });
+  switch (method) {
+    case 'server/discover':
+      return complete({
+        supportedVersions: MODERN_VERSIONS,
+        capabilities: { tools: {} },
+        _meta: { 'io.modelcontextprotocol/serverInfo': SERVER_INFO },
+        instructions: INSTRUCTIONS,
+      });
+    case 'ping':
+      return complete({});
+    case 'tools/list':
+      return complete({ tools: tools.map(definition) });
+    case 'tools/call': {
+      const r = await callTool(params, tools, ctx);
+      return 'error' in r ? fail(200, id, r.error.code, r.error.message) : complete(r.result);
+    }
+    default:
+      return fail(404, id, -32601, `Method not found: ${method}`);
+  }
+}
+
+/** Legacy era: initialize handshake. Errors use HTTP 200, because a legacy 404 means "session expired". */
+async function legacy(req: HttpIn, rpc: Rpc, tools: Tool[], ctx: ToolCtx): Promise<HttpOut> {
+  const { method, id, isNotification, params } = rpc;
   if (isNotification) return accepted;
   if (method !== 'initialize' && req.protocolVersion && !LEGACY_VERSIONS.includes(req.protocolVersion)) {
     return fail(400, id, -32600, `Unsupported MCP-Protocol-Version: ${req.protocolVersion}`);
@@ -161,9 +193,12 @@ async function callTool(
   try {
     return { result: { content: await tool.run(args, ctx), isError: false } };
   } catch (e) {
-    const text = e instanceof Error ? e.message : String(e);
-    return { result: { content: [{ type: 'text', text }], isError: true } };
+    return { result: { content: [{ type: 'text', text: errorMessage(e) }], isError: true } };
   }
+}
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {

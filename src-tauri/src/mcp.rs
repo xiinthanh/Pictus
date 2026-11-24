@@ -7,20 +7,26 @@
 //! time, so the editor never sees two AI edits at once.
 
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{ErrorKind, Read};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 use tiny_http::{Header, Method, Request, Response, Server};
 
 const MAX_BODY: u64 = 4 * 1024 * 1024;
+const MIN_TOKEN_LEN: usize = 32;
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(200);
+/// tiny_http closes its listening socket on a background thread after the
+/// server is dropped, so an immediate restart on the same port may still
+/// find it in use for a moment.
+const BIND_RETRIES: u32 = 10;
+const BIND_RETRY_DELAY: Duration = Duration::from_millis(100);
 
 type Pending = Arc<Mutex<HashMap<u64, Sender<(u16, String)>>>>;
 
@@ -45,18 +51,25 @@ struct McpRequest {
     protocol_version: Option<String>,
     method: Option<String>,
     name: Option<String>,
+    /// Unix ms at which this relay stops waiting; the frontend refuses to
+    /// start work that would finish after the client already got a 504.
+    expires_at: u64,
 }
 
-/// Starts (or restarts) the endpoint on 127.0.0.1:`port`.
-#[tauri::command]
+#[derive(Clone, Serialize)]
+struct McpStopped {
+    error: String,
+}
+
+/// Starts (or restarts) the endpoint on 127.0.0.1:`port`. Runs off the main
+/// thread because stopping a previous server and binding may wait briefly.
+#[tauri::command(async)]
 pub fn mcp_start(app: AppHandle, state: State<McpState>, port: u16, token: String) -> Result<(), String> {
-    if token.len() < 32 {
-        return Err("Token is too short".into());
+    if token.len() < MIN_TOKEN_LEN {
+        return Err(format!("The token must be at least {MIN_TOKEN_LEN} characters long"));
     }
-    stop(&state);
-    let server = Server::http(("127.0.0.1", port))
-        .map(Arc::new)
-        .map_err(|e| format!("Could not listen on port {port}: {e}"))?;
+    stop(&state)?;
+    let server = Arc::new(bind(port)?);
     let stop_flag = Arc::new(AtomicBool::new(false));
     let thread = {
         let (server, stop_flag) = (server.clone(), stop_flag.clone());
@@ -67,36 +80,71 @@ pub fn mcp_start(app: AppHandle, state: State<McpState>, port: u16, token: Strin
     Ok(())
 }
 
-#[tauri::command]
-pub fn mcp_stop(state: State<McpState>) {
-    stop(&state);
+#[tauri::command(async)]
+pub fn mcp_stop(state: State<McpState>) -> Result<(), String> {
+    stop(&state)
 }
 
 /// The frontend's answer to a `mcp-request` event.
 #[tauri::command]
-pub fn mcp_respond(state: State<McpState>, id: u64, status: u16, body: String) {
-    if let Some(tx) = state.pending.lock().unwrap().remove(&id) {
-        let _ = tx.send((status, body));
+pub fn mcp_respond(state: State<McpState>, id: u64, status: u16, body: String) -> Result<(), String> {
+    let gone = || format!("MCP request {id} is no longer waiting (timed out or the connection was turned off)");
+    let tx = state.pending.lock().unwrap().remove(&id).ok_or_else(gone)?;
+    tx.send((status, body)).map_err(|_| gone())
+}
+
+fn bind(port: u16) -> Result<Server, String> {
+    let mut attempt = 0;
+    loop {
+        match Server::http(("127.0.0.1", port)) {
+            Ok(server) => return Ok(server),
+            Err(e) if attempt < BIND_RETRIES && is_addr_in_use(&*e) => {
+                attempt += 1;
+                thread::sleep(BIND_RETRY_DELAY);
+            }
+            Err(e) => return Err(format!("Could not listen on 127.0.0.1:{port}: {e}. Is another program using this port?")),
+        }
     }
 }
 
-fn stop(state: &McpState) {
-    if let Some(run) = state.run.lock().unwrap().take() {
-        run.stop.store(true, Ordering::SeqCst);
-        run.server.unblock();
-        state.pending.lock().unwrap().clear();
-        let _ = run.thread.join(); // returns within one POLL interval
-    }
+fn is_addr_in_use(e: &(dyn std::error::Error + Send + Sync + 'static)) -> bool {
+    e.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == ErrorKind::AddrInUse)
+}
+
+fn stop(state: &McpState) -> Result<(), String> {
+    let Some(run) = state.run.lock().unwrap().take() else {
+        return Ok(());
+    };
+    run.stop.store(true, Ordering::SeqCst);
+    run.server.unblock();
+    state.pending.lock().unwrap().clear();
+    // Returns within one POLL interval: the pending answer it may wait on was just dropped.
+    run.thread.join().map_err(|_| "The AI connection thread crashed".to_string())
 }
 
 fn serve(app: AppHandle, server: Arc<Server>, token: String, stop: Arc<AtomicBool>, pending: Pending, next_id: Arc<AtomicU64>) {
-    while let Ok(mut req) = server.recv() {
-        if stop.load(Ordering::SeqCst) {
-            let _ = req.respond(text(503, "Pictus AI connection is off"));
-            break;
+    loop {
+        let mut req = match server.recv() {
+            Ok(req) => req,
+            Err(e) => {
+                // `unblock()` from stop() also lands here; only an unexpected end is reported.
+                if !stop.load(Ordering::SeqCst) {
+                    let error = format!("the server stopped accepting connections: {e}");
+                    if let Err(emit_err) = app.emit_to("main", "mcp-stopped", McpStopped { error }) {
+                        eprintln!("Pictus MCP: server stopped ({e}) and the window could not be told: {emit_err}");
+                    }
+                }
+                return;
+            }
+        };
+        let response = if stop.load(Ordering::SeqCst) {
+            text(503, "Pictus AI connection is off")
+        } else {
+            handle(&app, &mut req, &token, &stop, &pending, &next_id)
+        };
+        if let Err(e) = req.respond(response) {
+            eprintln!("Pictus MCP: could not send a response (client disconnected?): {e}");
         }
-        let response = handle(&app, &mut req, &token, &stop, &pending, &next_id);
-        let _ = req.respond(response);
     }
 }
 
@@ -117,13 +165,12 @@ fn handle(
     if *req.method() != Method::Post {
         return text(405, "Method not allowed").with_header(hdr("Allow", "POST"));
     }
-    let mut body = String::new();
-    if req.as_reader().take(MAX_BODY + 1).read_to_string(&mut body).is_err() {
-        return text(400, "Body must be UTF-8 JSON");
-    }
-    if body.len() as u64 > MAX_BODY {
-        return text(413, "Request too large");
-    }
+    let declared_len = req.body_length();
+    let body = match read_body(req.as_reader(), declared_len) {
+        Ok(body) => body,
+        Err(413) => return text(413, &format!("Request too large (limit {} MB)", MAX_BODY / (1024 * 1024))),
+        Err(code) => return text(code, "Body must be UTF-8 JSON"),
+    };
 
     let id = next_id.fetch_add(1, Ordering::SeqCst);
     let (tx, rx) = mpsc::channel();
@@ -134,6 +181,7 @@ fn handle(
         protocol_version: header(req, "MCP-Protocol-Version").map(str::to_owned),
         method: header(req, "Mcp-Method").map(str::to_owned),
         name: header(req, "Mcp-Name").map(str::to_owned),
+        expires_at: unix_ms(SystemTime::now() + ANSWER_TIMEOUT),
     };
     if app.emit_to("main", "mcp-request", event).is_err() {
         pending.lock().unwrap().remove(&id);
@@ -156,6 +204,26 @@ fn handle(
             .with_header(hdr("Content-Type", "application/json")),
         None => text(504, "Pictus did not answer in time"),
     }
+}
+
+/// The body as UTF-8, or the HTTP status to reject with. Size is checked
+/// before decoding, so a cut through a multi-byte character still reads as
+/// "too large" rather than "invalid UTF-8".
+fn read_body(reader: &mut dyn Read, declared_len: Option<usize>) -> Result<String, u16> {
+    if declared_len.is_some_and(|n| n as u64 > MAX_BODY) {
+        return Err(413);
+    }
+    let mut bytes = Vec::new();
+    reader.take(MAX_BODY + 1).read_to_end(&mut bytes).map_err(|_| 400u16)?;
+    if bytes.len() as u64 > MAX_BODY {
+        return Err(413);
+    }
+    String::from_utf8(bytes).map_err(|_| 400)
+}
+
+fn unix_ms(t: SystemTime) -> u64 {
+    let since_epoch = t.duration_since(UNIX_EPOCH).expect("the system clock is set before 1970");
+    u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
 }
 
 /// Ok(()) or the HTTP status to reject with. Browsers send `Origin`; MCP
@@ -191,16 +259,55 @@ fn text(status: u16, msg: &str) -> Response<std::io::Cursor<Vec<u8>>> {
 
 #[cfg(test)]
 mod tests {
-    use super::authorize;
+    use super::{authorize, read_body, MAX_BODY, MIN_TOKEN_LEN};
+    use std::io::Cursor;
 
-    const T: &str = "0123456789abcdef0123456789abcdef";
+    /// A placeholder of the right length, not a secret.
+    fn token() -> String {
+        "a".repeat(MIN_TOKEN_LEN)
+    }
 
     #[test]
-    fn authorize_rules() {
-        assert_eq!(authorize(None, Some(&format!("Bearer {T}")), T), Ok(()));
-        assert_eq!(authorize(None, None, T), Err(401));
-        assert_eq!(authorize(None, Some("Bearer wrong"), T), Err(401));
-        assert_eq!(authorize(None, Some(T), T), Err(401));
-        assert_eq!(authorize(Some("http://evil.example"), Some(&format!("Bearer {T}")), T), Err(403));
+    fn authorize_accepts_the_bearer_token() {
+        let t = token();
+        assert_eq!(authorize(None, Some(&format!("Bearer {t}")), &t), Ok(()));
+    }
+
+    #[test]
+    fn authorize_rejects_missing_or_wrong_tokens() {
+        let t = token();
+        assert_eq!(authorize(None, None, &t), Err(401));
+        assert_eq!(authorize(None, Some("Bearer wrong"), &t), Err(401));
+        assert_eq!(authorize(None, Some(&t), &t), Err(401));
+    }
+
+    #[test]
+    fn authorize_rejects_browser_origins() {
+        let t = token();
+        assert_eq!(authorize(Some("http://evil.example"), Some(&format!("Bearer {t}")), &t), Err(403));
+    }
+
+    #[test]
+    fn read_body_rejects_a_declared_oversize_body_without_reading_it() {
+        let mut empty = Cursor::new(Vec::new());
+        assert_eq!(read_body(&mut empty, Some(MAX_BODY as usize + 1)), Err(413));
+    }
+
+    #[test]
+    fn read_body_reports_oversize_even_when_the_cut_splits_a_character() {
+        // 'ệ' is 3 bytes; the limit falls inside one of them.
+        let mut big = "ệ".repeat(MAX_BODY as usize / 3 + 1).into_bytes();
+        big.truncate(MAX_BODY as usize + 2);
+        assert_eq!(read_body(&mut Cursor::new(big), None), Err(413));
+    }
+
+    #[test]
+    fn read_body_rejects_invalid_utf8() {
+        assert_eq!(read_body(&mut Cursor::new(vec![0xff, 0xfe]), Some(2)), Err(400));
+    }
+
+    #[test]
+    fn read_body_returns_valid_text() {
+        assert_eq!(read_body(&mut Cursor::new(b"{}".to_vec()), Some(2)), Ok("{}".to_string()));
     }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Editor } from '../src/lib/core/editor';
-import { handleHttp, decodeHeader, LEGACY_VERSIONS, type HttpIn } from '../src/lib/mcp/protocol';
+import { handleHttp, decodeHeader, LEGACY_VERSIONS, START_MARGIN_MS, type HttpIn } from '../src/lib/mcp/protocol';
 import type { Tool, ToolCtx } from '../src/lib/mcp/tools';
 
 const V = '2026-07-28';
@@ -14,10 +14,6 @@ function makeCtx(editor = new Editor()): ToolCtx & { notified: string[] } {
   return {
     editor,
     notified,
-    info: () => ({ name: 'Untitled', dirty: false, layer: 0, color: 1 }),
-    newModel: () => {},
-    highlight: () => {},
-    snapshot: () => null,
     notify: (t) => notified.push(t),
   };
 }
@@ -132,6 +128,39 @@ describe('MCP protocol (legacy)', () => {
     expect((await call(legacy('notifications/initialized', {}, null))).status).toBe(202);
     const unknown = await call(legacy('nope'));
     expect([unknown.status, unknown.msg.error.code]).toEqual([200, -32601]);
+  });
+});
+
+describe('MCP protocol (relay deadline)', () => {
+  const NOW = 1_000_000;
+  const withDeadline = (expiresAt: number): HttpIn => ({
+    ...modern('tools/call', { name: 'echo', arguments: { text: 'hi' } }),
+    expiresAt,
+  });
+
+  it('does not run a tool whose request is about to expire', async () => {
+    const ctx = makeCtx();
+    const r = await handleHttp(withDeadline(NOW + START_MARGIN_MS - 1), [echo], ctx, NOW);
+    expect(r.status).toBe(503);
+    expect(JSON.parse(r.body)).toMatchObject({ id: 1, error: { code: -32603 } });
+    expect(ctx.notified).toEqual([]);
+  });
+
+  it('runs a tool when enough time is left', async () => {
+    const r = await handleHttp(withDeadline(NOW + START_MARGIN_MS + 1), [echo], makeCtx(), NOW);
+    expect(r.status).toBe(200);
+  });
+});
+
+describe('MCP protocol (internal errors)', () => {
+  it('answers 500 with the request id when the server itself fails', async () => {
+    const ctx = makeCtx();
+    ctx.notify = () => {
+      throw new Error('ui gone');
+    };
+    const r = await handleHttp(modern('tools/call', { name: 'echo', arguments: { text: 'hi' } }, 7), [echo], ctx);
+    expect(r.status).toBe(500);
+    expect(JSON.parse(r.body)).toMatchObject({ id: 7, error: { code: -32603, message: 'Internal error: ui gone' } });
   });
 });
 
