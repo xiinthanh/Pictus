@@ -5,6 +5,7 @@
   import { write3mf } from '$lib/core/export/threemf';
   import { colorBodies, mergedBody } from '$lib/core/mesher';
   import { baseName, errorText, pickSave, stripExt, withExt, writeBytes, writeText } from '$lib/platform/files';
+  import { loadSetting, saveSetting } from '$lib/platform/storage';
   import { app, editor } from '$lib/state/app.svelte';
   import {
     DEFAULT_EXPORT_PREFS,
@@ -15,15 +16,7 @@
   } from './exportPrefs';
   import Modal from './Modal.svelte';
 
-  function loadPrefs(): ExportPrefs {
-    try {
-      return parseExportPrefs(localStorage.getItem(EXPORT_PREFS_KEY));
-    } catch {
-      return { ...DEFAULT_EXPORT_PREFS };
-    }
-  }
-
-  const prefs = loadPrefs();
+  const prefs: ExportPrefs = loadSetting(EXPORT_PREFS_KEY, parseExportPrefs, { ...DEFAULT_EXPORT_PREFS });
   let format = $state<ExportFormat>(prefs.format);
   let isMultiColor = $state(prefs.isMultiColor);
   let voxelSize = $state(editor.voxelSize);
@@ -71,12 +64,10 @@
       } else {
         await writeBytes(path, writeStl(bodies, voxelSize));
       }
-      try {
-        localStorage.setItem(EXPORT_PREFS_KEY, JSON.stringify({ format, isMultiColor }));
-      } catch {
-        /* ignore */
-      }
-      app.flash(`Exported ${written}`, 6000);
+      // The export itself succeeded; a lost preference only needs mentioning.
+      const prefsFailure = saveSetting(EXPORT_PREFS_KEY, { format, isMultiColor });
+      const note = prefsFailure ? ` (could not remember these export settings: ${prefsFailure})` : '';
+      app.flash(`Exported ${written}${note}`, 6000);
       app.dialog = null;
     } catch (e) {
       await app.ask('Export failed', errorText(e), [{ id: 'ok', label: 'OK', isPrimary: true }]);

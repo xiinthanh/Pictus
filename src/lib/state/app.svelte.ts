@@ -1,6 +1,7 @@
 import { Editor } from '$lib/core/editor';
 import type { Vec3 } from '$lib/core/grid';
 import type { Mirror } from '$lib/core/tools';
+import { loadSetting, saveSetting } from '$lib/platform/storage';
 
 export type ToolId = 'place' | 'erase' | 'paint' | 'pick' | 'fill' | 'box';
 export type BoxMode = 'add' | 'erase' | 'paint';
@@ -22,13 +23,9 @@ export const TOOLS: { id: ToolId; label: string; key: string; hint: string }[] =
 
 const RECENT_KEY = 'pictus.recent';
 
-function loadRecent(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((s) => typeof s === 'string').slice(0, 8) : [];
-  } catch {
-    return [];
-  }
+function parseRecent(json: string | null): string[] {
+  const v = JSON.parse(json ?? '[]');
+  return Array.isArray(v) ? v.filter((s) => typeof s === 'string').slice(0, 8) : [];
 }
 
 export interface ConfirmRequest {
@@ -59,24 +56,22 @@ class AppState {
   /** Cells to highlight in the viewport (print check). */
   highlight = $state<Vec3[]>([]);
   confirm = $state<ConfirmRequest | null>(null);
-  recent = $state<string[]>(loadRecent());
+  recent = $state<string[]>(loadSetting(RECENT_KEY, parseRecent, []));
 
   addRecent(path: string) {
     this.recent = [path, ...this.recent.filter((p) => p.toLowerCase() !== path.toLowerCase())].slice(0, 8);
-    try {
-      localStorage.setItem(RECENT_KEY, JSON.stringify(this.recent));
-    } catch {
-      /* storage unavailable — recent list just won't persist */
-    }
+    this.saveRecent();
   }
 
   removeRecent(path: string) {
     this.recent = this.recent.filter((p) => p !== path);
-    try {
-      localStorage.setItem(RECENT_KEY, JSON.stringify(this.recent));
-    } catch {
-      /* ignore */
-    }
+    this.saveRecent();
+  }
+
+  /** The list still works for this session if it can't be saved, so a warning is enough. */
+  private saveRecent() {
+    const failure = saveSetting(RECENT_KEY, this.recent);
+    if (failure) console.warn(`Pictus: could not save the recent files list: ${failure}`);
   }
 
   ask(title: string, message: string, buttons: ConfirmRequest['buttons']): Promise<string> {
