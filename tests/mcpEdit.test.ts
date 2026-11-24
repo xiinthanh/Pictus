@@ -201,7 +201,24 @@ describe('undo', () => {
     const ctx = makeCtx();
     await run('set_voxels', { voxels: [[0, 0, 0, 1]] }, ctx);
     await run('undo', {}, ctx);
-    expect([filled(ctx), ctx.aiSteps.length]).toEqual([0, 0]);
+    expect(filled(ctx)).toBe(0);
+  });
+
+  it('still treats an AI edit as its own after the user redoes it', async () => {
+    const ctx = makeCtx();
+    await run('set_voxels', { voxels: [[0, 0, 0, 1]] }, ctx);
+    await run('undo', {}, ctx);
+    ctx.editor.redo();
+    await run('undo', {}, ctx);
+    expect(filled(ctx)).toBe(0);
+  });
+
+  it('forgets AI steps the undo history no longer holds', async () => {
+    const ctx = makeCtx();
+    await run('set_voxels', { voxels: [[0, 0, 0, 1]] }, ctx);
+    ctx.editor.load({ grid: new VoxelGrid(4, 3, 2), palette: defaultPalette(), voxelSize: 1 });
+    await run('set_voxels', { voxels: [[1, 0, 0, 1]] }, ctx);
+    expect(ctx.aiSteps).toEqual([ctx.editor.history.lastUndo]);
   });
 
   it('walks back several AI edits in order', async () => {

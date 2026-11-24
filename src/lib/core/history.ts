@@ -29,6 +29,11 @@ export class History {
     return this.undoStack[this.undoStack.length - 1] ?? null;
   }
 
+  /** Whether `c` can still be undone or redone (it hasn't been trimmed, cleared or replaced). */
+  holds(c: Change): boolean {
+    return this.undoStack.includes(c) || this.redoStack.includes(c);
+  }
+
   push(c: Change): void {
     if (c.idx.length === 0) return;
     this.undoStack.push(c);

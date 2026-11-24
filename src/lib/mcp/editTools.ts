@@ -9,12 +9,20 @@ import type { Tool, ToolCtx } from './tools';
 
 /** The AI sends each cell explicitly; larger shapes should use fill_box or several calls. */
 export const MAX_VOXELS_PER_CALL = 20_000;
-/** Matches History's step limit: older AI steps have left the undo stack anyway. */
-const MAX_AI_STEPS = 300;
 const UNDO_HINT = 'The user can undo it with Ctrl+Z; you can with the undo tool.';
 
 function refuseWhileDrawing(ctx: ToolCtx): void {
   if (ctx.editor.isInStroke) throw new Error('The user is drawing in Pictus right now. Retry in a moment.');
+}
+
+/**
+ * Drops AI steps History no longer keeps (trimmed by its size limits, cleared
+ * by a new or opened model, or replaced after an undo), so they don't pin memory.
+ */
+function forgetDroppedSteps(ctx: ToolCtx): void {
+  const { aiSteps, editor } = ctx;
+  const kept = aiSteps.filter((s) => editor.history.holds(s));
+  aiSteps.splice(0, aiSteps.length, ...kept);
 }
 
 /** Runs `change` as one undo step and remembers that step as the AI's. Returns the number of cells changed. */
@@ -30,10 +38,8 @@ function edit(ctx: ToolCtx, change: () => number): number {
     editor.endStroke();
   }
   const step = editor.history.lastUndo;
-  if (step && step !== before) {
-    aiSteps.push(step);
-    if (aiSteps.length > MAX_AI_STEPS) aiSteps.shift();
-  }
+  if (step && step !== before) aiSteps.push(step);
+  forgetDroppedSteps(ctx);
   return changed;
 }
 
@@ -171,19 +177,19 @@ const undo: Tool = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   run: (_args, ctx) => {
     refuseWhileDrawing(ctx);
+    forgetDroppedSteps(ctx);
     const { editor, aiSteps } = ctx;
-    if (aiSteps.length === 0) throw new Error('There is no AI edit left to undo.');
     const top = editor.history.lastUndo;
+    if (!top) throw new Error('There is no AI edit left to undo.');
     // Any AI step may be on top: the user can Ctrl+Z the AI's latest edits, exposing an earlier one.
-    const at = top ? aiSteps.lastIndexOf(top) : -1;
-    if (!top || at < 0) {
+    if (!aiSteps.includes(top)) {
       throw new Error(
-        "The latest step in Pictus is the user's own edit (or there is none), so nothing was undone. " +
+        "The latest step in Pictus is the user's own edit, so nothing was undone. " +
           'Ask the user to press Ctrl+Z if they want it reverted.',
       );
     }
+    // The step stays in aiSteps while it sits on the redo stack, so a Ctrl+Y makes it the AI's again.
     editor.undo();
-    aiSteps.splice(at, 1);
     return [text(`Undid the last AI edit (${top.idx.length} cells).`)];
   },
 };

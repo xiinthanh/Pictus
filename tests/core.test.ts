@@ -62,6 +62,29 @@ describe('Editor history', () => {
     e.endStroke();
     expect(e.history.canUndo).toBe(false);
   });
+
+  it('exposes the step undo would revert next', () => {
+    const e = new Editor();
+    e.fill([0], 1);
+    expect(e.history.lastUndo?.idx).toEqual(Int32Array.from([0]));
+  });
+
+  it('holds a step while it can be undone or redone', () => {
+    const e = new Editor();
+    e.fill([0], 1);
+    const step = e.history.lastUndo!;
+    e.undo();
+    expect(e.history.holds(step)).toBe(true);
+  });
+
+  it('lets go of a step once a new edit clears the redo stack', () => {
+    const e = new Editor();
+    e.fill([0], 1);
+    const step = e.history.lastUndo!;
+    e.undo();
+    e.fill([1], 1);
+    expect(e.history.holds(step)).toBe(false);
+  });
 });
 
 describe('tools', () => {
