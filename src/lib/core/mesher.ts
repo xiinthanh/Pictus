@@ -5,12 +5,66 @@ export const CHUNK = 16;
 
 /** The 6 cube faces: normal + 4 corners, counter-clockwise seen from outside. */
 export const FACES: { n: [number, number, number]; c: [number, number, number][]; shade: number }[] = [
-  { n: [1, 0, 0], c: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], shade: 0.8 },
-  { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], shade: 0.7 },
-  { n: [0, 1, 0], c: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]], shade: 0.9 },
-  { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], shade: 0.65 },
-  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], shade: 1.0 },
-  { n: [0, 0, -1], c: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]], shade: 0.55 },
+  {
+    n: [1, 0, 0],
+    c: [
+      [1, 0, 0],
+      [1, 1, 0],
+      [1, 1, 1],
+      [1, 0, 1],
+    ],
+    shade: 0.8,
+  },
+  {
+    n: [-1, 0, 0],
+    c: [
+      [0, 0, 0],
+      [0, 0, 1],
+      [0, 1, 1],
+      [0, 1, 0],
+    ],
+    shade: 0.7,
+  },
+  {
+    n: [0, 1, 0],
+    c: [
+      [0, 1, 0],
+      [0, 1, 1],
+      [1, 1, 1],
+      [1, 1, 0],
+    ],
+    shade: 0.9,
+  },
+  {
+    n: [0, -1, 0],
+    c: [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 0, 1],
+      [0, 0, 1],
+    ],
+    shade: 0.65,
+  },
+  {
+    n: [0, 0, 1],
+    c: [
+      [0, 0, 1],
+      [1, 0, 1],
+      [1, 1, 1],
+      [0, 1, 1],
+    ],
+    shade: 1.0,
+  },
+  {
+    n: [0, 0, -1],
+    c: [
+      [0, 0, 0],
+      [0, 1, 0],
+      [1, 1, 0],
+      [1, 0, 0],
+    ],
+    shade: 0.55,
+  },
 ];
 
 export interface ChunkMesh {
@@ -36,7 +90,9 @@ export function buildChunk(
   const col: number[] = [];
   const idx: number[] = [];
   const { sx, sy, data } = grid;
-  const x0 = cx * CHUNK, y0 = cy * CHUNK, z0 = cz * CHUNK;
+  const x0 = cx * CHUNK,
+    y0 = cy * CHUNK,
+    z0 = cz * CHUNK;
   const x1 = Math.min(x0 + CHUNK, sx);
   const y1 = Math.min(y0 + CHUNK, sy);
   const z1 = Math.min(z0 + CHUNK, grid.sz, maxZ + 1);
@@ -49,7 +105,9 @@ export function buildChunk(
         for (const f of FACES) {
           if (solid(x + f.n[0], y + f.n[1], z + f.n[2])) continue;
           const base = pos.length / 3;
-          const r = rgb[v * 3] * f.shade, g = rgb[v * 3 + 1] * f.shade, b = rgb[v * 3 + 2] * f.shade;
+          const r = rgb[v * 3] * f.shade,
+            g = rgb[v * 3 + 1] * f.shade,
+            b = rgb[v * 3 + 2] * f.shade;
           for (const c of f.c) {
             pos.push(x + c[0], y + c[1], z + c[2]);
             col.push(r, g, b);
@@ -102,8 +160,7 @@ export function buildBody(grid: VoxelGrid, isSolid: (v: number) => boolean, colo
         sheets = vertexSheets(L[0], L[1], L[2], solidAt);
         sheetCache.set(lkey, sheets);
       }
-      const bitOf = (c: number[]) =>
-        (c[0] - L[0] + 1) | ((c[1] - L[1] + 1) << 1) | ((c[2] - L[2] + 1) << 2);
+      const bitOf = (c: number[]) => (c[0] - L[0] + 1) | ((c[1] - L[1] + 1) << 1) | ((c[2] - L[2] + 1) << 2);
       sheet = 1 + (sheets.get(bitOf(owner) * 8 + bitOf(outward)) ?? 0);
     }
     const key = lkey * 32 + sheet;
@@ -119,7 +176,8 @@ export function buildBody(grid: VoxelGrid, isSolid: (v: number) => boolean, colo
   for (let a = 0; a < 3; a++) {
     const u = (a + 1) % 3;
     const v = (a + 2) % 3;
-    const su = size[u], sv = size[v];
+    const su = size[u],
+      sv = size[v];
     const mask = new Uint8Array(su * sv);
     for (const dir of [1, -1]) {
       for (let s = 0; s < size[a]; s++) {
@@ -127,16 +185,21 @@ export function buildBody(grid: VoxelGrid, isSolid: (v: number) => boolean, colo
         const c = [0, 0, 0];
         for (let j = 0; j < sv; j++) {
           for (let i = 0; i < su; i++) {
-            c[a] = s; c[u] = i; c[v] = j;
-            const inside = solidAt(c[0], c[1], c[2]);
+            c[a] = s;
+            c[u] = i;
+            c[v] = j;
+            const isInside = solidAt(c[0], c[1], c[2]);
             c[a] = s + dir;
-            mask[i + j * su] = inside && !solidAt(c[0], c[1], c[2]) ? 1 : 0;
+            mask[i + j * su] = isInside && !solidAt(c[0], c[1], c[2]) ? 1 : 0;
           }
         }
         const plane = dir > 0 ? s + 1 : s;
         for (let j = 0; j < sv; j++) {
-          for (let i = 0; i < su; ) {
-            if (!mask[i + j * su]) { i++; continue; }
+          for (let i = 0; i < su;) {
+            if (!mask[i + j * su]) {
+              i++;
+              continue;
+            }
             let w = 1;
             while (i + w < su && mask[i + w + j * su]) w++;
             let h = 1;
@@ -153,8 +216,18 @@ export function buildBody(grid: VoxelGrid, isSolid: (v: number) => boolean, colo
     }
   }
 
-  function emitRect(a: number, u: number, v: number, dir: number, s: number, plane: number,
-                    i: number, j: number, w: number, h: number) {
+  function emitRect(
+    a: number,
+    u: number,
+    v: number,
+    dir: number,
+    s: number,
+    plane: number,
+    i: number,
+    j: number,
+    w: number,
+    h: number,
+  ) {
     // Perimeter points, counter-clockwise in (u,v) — which faces +a since u×v = a.
     const ring: [number, number][] = [];
     for (let k = 0; k < w; k++) ring.push([i + k, j]);
@@ -163,10 +236,18 @@ export function buildBody(grid: VoxelGrid, isSolid: (v: number) => boolean, colo
     for (let k = h; k > 0; k--) ring.push([i, j + k]);
     if (dir < 0) ring.reverse();
     const ids = ring.map(([pu, pv]) => {
-      const L = [0, 0, 0], owner = [0, 0, 0], out = [0, 0, 0];
-      L[a] = plane; L[u] = pu; L[v] = pv;
-      owner[a] = s; owner[u] = Math.min(Math.max(pu, i), i + w - 1); owner[v] = Math.min(Math.max(pv, j), j + h - 1);
-      out[a] = s + dir; out[u] = owner[u]; out[v] = owner[v];
+      const L = [0, 0, 0],
+        owner = [0, 0, 0],
+        out = [0, 0, 0];
+      L[a] = plane;
+      L[u] = pu;
+      L[v] = pv;
+      owner[a] = s;
+      owner[u] = Math.min(Math.max(pu, i), i + w - 1);
+      owner[v] = Math.min(Math.max(pv, j), j + h - 1);
+      out[a] = s + dir;
+      out[u] = owner[u];
+      out[v] = owner[v];
       return latticeVertex(L, owner, out);
     });
     if (w === 1 && h === 1) {
@@ -175,7 +256,9 @@ export function buildBody(grid: VoxelGrid, isSolid: (v: number) => boolean, colo
     }
     const center = positions.length / 3;
     const p = [0, 0, 0];
-    p[a] = plane; p[u] = i + w / 2; p[v] = j + h / 2;
+    p[a] = plane;
+    p[u] = i + w / 2;
+    p[v] = j + h / 2;
     positions.push(p[0], p[1], p[2]);
     for (let k = 0; k < ids.length; k++) indices.push(center, ids[k], ids[(k + 1) % ids.length]);
   }

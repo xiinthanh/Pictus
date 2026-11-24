@@ -94,7 +94,10 @@
   /** Maps label space (100 units across a face, y down) onto the projected face. */
   function labelMatrix({ n, u, v }: Face) {
     const k = 1 / 50;
-    const a = px(u) * k, b = py(u) * k, c = -px(v) * k, d = -py(v) * k;
+    const a = px(u) * k,
+      b = py(u) * k,
+      c = -px(v) * k,
+      d = -py(v) * k;
     return `matrix(${[a, b, c, d, px(n), py(n)].map((x) => x.toFixed(4)).join(' ')})`;
   }
 
@@ -143,7 +146,15 @@
           <title>{c.name}</title>
         </polygon>
       {/each}
-      <polygon class="outline" points={pts([comb(f.n, f.u, f.v, -1, -1), comb(f.n, f.u, f.v, 1, -1), comb(f.n, f.u, f.v, 1, 1), comb(f.n, f.u, f.v, -1, 1)])} />
+      <polygon
+        class="outline"
+        points={pts([
+          comb(f.n, f.u, f.v, -1, -1),
+          comb(f.n, f.u, f.v, 1, -1),
+          comb(f.n, f.u, f.v, 1, 1),
+          comb(f.n, f.u, f.v, -1, 1),
+        ])}
+      />
       <text class="label" transform={labelMatrix(f)}>{f.label}</text>
     </g>
   {/each}

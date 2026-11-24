@@ -12,9 +12,11 @@ export function editCells(cells: Vec3[], mode: BoxMode): number {
   for (const [x, y, z] of mirrorCells(g, cells, app.mirror)) {
     const i = g.index(x, y, z);
     const cur = g.data[i];
-    if (mode === 'add') { if (!cur) pairs.push([i, app.color]); }
-    else if (mode === 'erase') { if (cur) pairs.push([i, 0]); }
-    else if (cur) pairs.push([i, app.color]);
+    if (mode === 'add') {
+      if (!cur) pairs.push([i, app.color]);
+    } else if (mode === 'erase') {
+      if (cur) pairs.push([i, 0]);
+    } else if (cur) pairs.push([i, app.color]);
   }
   return editor.apply(pairs);
 }
@@ -48,8 +50,7 @@ export function boxRegion(start: Vec3, end: Vec3, axis: number, dirSign: number,
   }
   const out: Vec3[] = [];
   for (let z = lo[2]; z <= hi[2]; z++)
-    for (let y = lo[1]; y <= hi[1]; y++)
-      for (let x = lo[0]; x <= hi[0]; x++) out.push([x, y, z]);
+    for (let y = lo[1]; y <= hi[1]; y++) for (let x = lo[0]; x <= hi[0]; x++) out.push([x, y, z]);
   return out;
 }
 

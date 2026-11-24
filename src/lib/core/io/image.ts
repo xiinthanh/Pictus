@@ -11,7 +11,7 @@ export interface ImageOptions {
   /** Border around the art, in voxels. */
   margin: number;
   plateColor: number;
-  keyring: boolean;
+  hasKeyring: boolean;
 }
 
 export const DEFAULT_IMAGE_OPTIONS: ImageOptions = {
@@ -20,7 +20,7 @@ export const DEFAULT_IMAGE_OPTIONS: ImageOptions = {
   plateShape: 'outline',
   margin: 1,
   plateColor: 0x212121,
-  keyring: false,
+  hasKeyring: false,
 };
 
 const RING_OUTER = 3.2;
@@ -34,19 +34,31 @@ export function quantize(counts: Map<number, number>, max: number): Map<number, 
   let boxes: number[][] = [colors];
   while (boxes.length < max) {
     // Split the box with the widest channel range.
-    let bi = -1, bk = 0, bRange = 0;
+    let bi = -1,
+      bk = 0,
+      bRange = 0;
     boxes.forEach((box, i) => {
       if (box.length < 2) return;
       for (let k = 0; k < 3; k++) {
-        let lo = 255, hi = 0;
-        for (const c of box) { const v = ch(c, k); if (v < lo) lo = v; if (v > hi) hi = v; }
-        if (hi - lo > bRange) { bRange = hi - lo; bi = i; bk = k; }
+        let lo = 255,
+          hi = 0;
+        for (const c of box) {
+          const v = ch(c, k);
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+        if (hi - lo > bRange) {
+          bRange = hi - lo;
+          bi = i;
+          bk = k;
+        }
       }
     });
     if (bi < 0) break;
     const box = boxes[bi].sort((a, b) => ch(a, bk) - ch(b, bk));
     const total = box.reduce((s, c) => s + counts.get(c)!, 0);
-    let acc = 0, cut = 1;
+    let acc = 0,
+      cut = 1;
     for (let i = 0; i < box.length - 1; i++) {
       acc += counts.get(box[i])!;
       cut = i + 1;
@@ -56,10 +68,16 @@ export function quantize(counts: Map<number, number>, max: number): Map<number, 
   }
   const map = new Map<number, number>();
   for (const box of boxes) {
-    let r = 0, g = 0, b = 0, n = 0;
+    let r = 0,
+      g = 0,
+      b = 0,
+      n = 0;
     for (const c of box) {
       const w = counts.get(c)!;
-      r += ch(c, 0) * w; g += ch(c, 1) * w; b += ch(c, 2) * w; n += w;
+      r += ch(c, 0) * w;
+      g += ch(c, 1) * w;
+      b += ch(c, 2) * w;
+      n += w;
     }
     const avg = (Math.round(r / n) << 16) | (Math.round(g / n) << 8) | Math.round(b / n);
     for (const c of box) map.set(c, avg);
@@ -70,13 +88,19 @@ export function quantize(counts: Map<number, number>, max: number): Map<number, 
 /** Largest size (keeping aspect) at which an image fits the grid with the given options. */
 export function fitSize(w: number, h: number, o: ImageOptions): { w: number; h: number } {
   const extra = 2 * o.margin;
-  const ringRows = o.keyring ? Math.ceil(RING_OUTER * 2) : 0;
+  const ringRows = o.hasKeyring ? Math.ceil(RING_OUTER * 2) : 0;
   const scale = Math.min(1, (MAX_DIM - extra) / w, (MAX_DIM - extra - ringRows) / h);
   return { w: Math.max(1, Math.floor(w * scale)), h: Math.max(1, Math.floor(h * scale)) };
 }
 
 /** Nearest-neighbour downscale of RGBA pixels. */
-export function resizeNearest(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, nw: number, nh: number): Uint8Array {
+export function resizeNearest(
+  rgba: Uint8ClampedArray | Uint8Array,
+  w: number,
+  h: number,
+  nw: number,
+  nh: number,
+): Uint8Array {
   const out = new Uint8Array(nw * nh * 4);
   for (let y = 0; y < nh; y++)
     for (let x = 0; x < nw; x++) {
@@ -107,7 +131,7 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
 
   const palette = [0];
   let plateIndex = 0;
-  if (plate > 0 || o.keyring) {
+  if (plate > 0 || o.hasKeyring) {
     palette.push(o.plateColor);
     plateIndex = 1;
   }
@@ -115,7 +139,10 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
   const colorIndex = new Map<number, number>();
   for (const [c, q] of qmap) {
     let idx = palette.indexOf(q);
-    if (idx < 1) { idx = palette.length; palette.push(q); }
+    if (idx < 1) {
+      idx = palette.length;
+      palette.push(q);
+    }
     colorIndex.set(c, idx);
   }
   if (!plateIndex) plateIndex = colorIndex.values().next().value!;
@@ -126,22 +153,35 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
   const footprint = new Uint8Array(W * baseH);
   for (let gy = 0; gy < baseH; gy++)
     for (let gx = 0; gx < W; gx++) {
-      if (o.plateShape === 'rectangle') { footprint[gy * W + gx] = 1; continue; }
+      if (o.plateShape === 'rectangle') {
+        footprint[gy * W + gx] = 1;
+        continue;
+      }
       // Outline: any opaque pixel within `margin` (Chebyshev distance).
       search: for (let dy = -margin; dy <= margin; dy++)
         for (let dx = -margin; dx <= margin; dx++) {
-          const px = gx - margin + dx, py = h - 1 - (gy - margin + dy);
-          if (px >= 0 && py >= 0 && px < w && py < h && opaque(px, py)) { footprint[gy * W + gx] = 1; break search; }
+          const px = gx - margin + dx,
+            py = h - 1 - (gy - margin + dy);
+          if (px >= 0 && py >= 0 && px < w && py < h && opaque(px, py)) {
+            footprint[gy * W + gx] = 1;
+            break search;
+          }
         }
     }
 
   let ring: { cx: number; cy: number } | null = null;
   let H = baseH;
-  if (o.keyring) {
+  if (o.hasKeyring) {
     const cx = Math.floor(W / 2);
     let top = -1;
     for (let gy = baseH - 1; gy >= 0 && top < 0; gy--) if (footprint[gy * W + cx]) top = gy;
-    if (top < 0) for (let gy = baseH - 1; gy >= 0 && top < 0; gy--) for (let gx = 0; gx < W; gx++) if (footprint[gy * W + gx]) { top = gy; break; }
+    if (top < 0)
+      for (let gy = baseH - 1; gy >= 0 && top < 0; gy--)
+        for (let gx = 0; gx < W; gx++)
+          if (footprint[gy * W + gx]) {
+            top = gy;
+            break;
+          }
     const cy = top + RING_OUTER - 0.5;
     ring = { cx: cx + 0.5, cy: cy + 0.5 };
     H = Math.max(baseH, Math.ceil(ring.cy + RING_OUTER));
@@ -161,7 +201,8 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
     for (let px = 0; px < w; px++) {
       if (!opaque(px, py)) continue;
       const c = colorIndex.get(pixel(px, py))!;
-      const gx = px + margin, gy = h - 1 - py + margin;
+      const gx = px + margin,
+        gy = h - 1 - py + margin;
       for (let z = plate; z < D; z++) grid.set(gx, gy, z, c);
     }
   if (ring) {
@@ -169,8 +210,8 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
     for (let gy = 0; gy < H; gy++)
       for (let gx = 0; gx < W; gx++) {
         const d = Math.hypot(gx + 0.5 - ring.cx, gy + 0.5 - ring.cy);
-        const inHole = d < RING_INNER;
-        if (inHole) {
+        const isInHole = d < RING_INNER;
+        if (isInHole) {
           for (let z = 0; z < D; z++) grid.set(gx, gy, z, 0);
         } else if (d <= RING_OUTER) {
           for (let z = 0; z < ringTop; z++) if (!grid.get(gx, gy, z)) grid.set(gx, gy, z, plateIndex);

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { registerViewport } from '$lib/mcp/bridge';
   import { Viewport } from '$lib/render/viewport';
   import { app, editor } from '$lib/state/app.svelte';
   import CubeView from './CubeView.svelte';
@@ -10,7 +11,11 @@
 
   onMount(() => {
     view = new Viewport(el);
-    return () => view?.dispose();
+    registerViewport(view);
+    return () => {
+      registerViewport(null);
+      view?.dispose();
+    };
   });
 
   // A string, so effects re-run only when the grid dimensions actually change.
@@ -18,7 +23,7 @@
 
   $effect(() => {
     void dims;
-    view?.setLayer(app.layerMode ? Math.min(app.layer, editor.grid.sz - 1) : null);
+    view?.setLayer(app.isLayerMode ? Math.min(app.layer, editor.grid.sz - 1) : null);
   });
   $effect(() => {
     void dims;

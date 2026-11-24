@@ -8,6 +8,10 @@ import { mirrorCells } from '$lib/core/tools';
 import { boxRegion, editCells, fillAt, pickAt } from '$lib/editing';
 import { app, editor, type BoxMode } from '$lib/state/app.svelte';
 
+/** 'current': what the user sees. 'overview': the whole model from a 3/4 angle. */
+export type SnapshotView = 'current' | 'overview';
+const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
+
 type Drag =
   | { kind: 'stroke'; mode: BoxMode; axis: number; plane: number; coord: number }
   | { kind: 'box'; mode: BoxMode; start: Vec3; end: Vec3; axis: number; plane: number; sign: number };
@@ -44,8 +48,8 @@ export class Viewport {
   private mirrorPlanes = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   private drag: Drag | null = null;
-  private orbitHeld = false;
-  private frameRequested = false;
+  private isOrbitHeld = false;
+  private isFrameRequested = false;
   private snapRaf = 0;
   private disposers: (() => void)[] = [];
   /** Called with the camera's orientation whenever the camera moves. */
@@ -72,7 +76,10 @@ export class Viewport {
 
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.04, 1.04, 1.04));
     for (let i = 0; i < 8; i++) {
-      const g = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: COLORS.place, depthTest: false, transparent: true }));
+      const g = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: COLORS.place, depthTest: false, transparent: true }),
+      );
       g.renderOrder = 10;
       g.visible = false;
       this.ghosts.push(g);
@@ -86,13 +93,23 @@ export class Viewport {
     this.boxPreview.renderOrder = 9;
     this.slicePlane = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({ color: COLORS.slice, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: COLORS.slice,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
     );
     this.slicePlane.visible = false;
     this.scene.add(this.boxPreview, this.slicePlane);
 
     const el = this.renderer.domElement;
-    const on = <K extends keyof HTMLElementEventMap>(t: EventTarget, type: K, fn: (e: HTMLElementEventMap[K]) => void) => {
+    const on = <K extends keyof HTMLElementEventMap>(
+      t: EventTarget,
+      type: K,
+      fn: (e: HTMLElementEventMap[K]) => void,
+    ) => {
       t.addEventListener(type, fn as EventListener);
       this.disposers.push(() => t.removeEventListener(type, fn as EventListener));
     };
@@ -100,7 +117,9 @@ export class Viewport {
     on(el, 'pointermove', (e) => this.onMove(e));
     on(el, 'pointerup', (e) => this.onUp(e));
     on(el, 'pointercancel', (e) => this.onUp(e));
-    on(el, 'pointerleave', () => { if (!this.drag) this.showTarget(null); });
+    on(el, 'pointerleave', () => {
+      if (!this.drag) this.showTarget(null);
+    });
     on(el, 'contextmenu', (e) => e.preventDefault());
     on(el, 'wheel', () => this.cancelSnap());
     on(window, 'keydown', (e) => this.onKey(e as KeyboardEvent, true));
@@ -169,7 +188,8 @@ export class Viewport {
 
   private markAll() {
     const [nx, ny, nz] = this.chunkCounts();
-    for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) this.dirtyChunks.add(x + 8 * (y + 8 * z));
+    for (let z = 0; z < nz; z++)
+      for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) this.dirtyChunks.add(x + 8 * (y + 8 * z));
   }
 
   /** Marks the chunk containing a cell, plus neighbours whose border faces depend on it. */
@@ -183,8 +203,16 @@ export class Viewport {
     };
     add(c);
     for (let k = 0; k < 3; k++) {
-      if (p[k] % CHUNK === 0) { const n = c.slice(); n[k]--; add(n); }
-      if (p[k] % CHUNK === CHUNK - 1) { const n = c.slice(); n[k]++; add(n); }
+      if (p[k] % CHUNK === 0) {
+        const n = c.slice();
+        n[k]--;
+        add(n);
+      }
+      if (p[k] % CHUNK === CHUNK - 1) {
+        const n = c.slice();
+        n[k]++;
+        add(n);
+      }
     }
   }
 
@@ -192,7 +220,9 @@ export class Viewport {
     const g = editor.grid;
     const maxZ = Math.min(this.maxZ, g.sz - 1);
     for (const key of this.dirtyChunks) {
-      const cx = key % 8, cy = Math.floor(key / 8) % 8, cz = Math.floor(key / 64);
+      const cx = key % 8,
+        cy = Math.floor(key / 8) % 8,
+        cz = Math.floor(key / 64);
       const old = this.chunks.get(key);
       if (old) {
         old.geometry.dispose();
@@ -235,20 +265,28 @@ export class Viewport {
     this.requestRender();
   }
 
-  setMirror(m: { x: boolean; y: boolean; z: boolean }) {
-    this.mirrorPlanes.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+  setMirror(m: { isX: boolean; isY: boolean; isZ: boolean }) {
+    this.mirrorPlanes.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
     this.mirrorPlanes.clear();
     const g = editor.grid;
-    const mat = new THREE.MeshBasicMaterial({ color: 0xb388ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false });
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xb388ff,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
     const add = (w: number, h: number, pos: Vec3, rot: [number, number, number]) => {
       const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
       p.position.set(...pos);
       p.rotation.set(...rot);
       this.mirrorPlanes.add(p);
     };
-    if (m.x) add(g.sz, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, Math.PI / 2, 0]);
-    if (m.y) add(g.sx, g.sz, [g.sx / 2, g.sy / 2, g.sz / 2], [Math.PI / 2, 0, 0]);
-    if (m.z) add(g.sx, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, 0, 0]);
+    if (m.isX) add(g.sz, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, Math.PI / 2, 0]);
+    if (m.isY) add(g.sx, g.sz, [g.sx / 2, g.sy / 2, g.sz / 2], [Math.PI / 2, 0, 0]);
+    if (m.isZ) add(g.sx, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, 0, 0]);
     this.requestRender();
   }
 
@@ -274,7 +312,13 @@ export class Viewport {
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       this.highlightMesh = new THREE.Mesh(
         geo,
-        new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false }),
+        new THREE.MeshBasicMaterial({
+          color: COLORS.highlight,
+          transparent: true,
+          opacity: 0.45,
+          depthTest: false,
+          depthWrite: false,
+        }),
       );
       this.highlightMesh.renderOrder = 8;
       this.scene.add(this.highlightMesh);
@@ -283,7 +327,9 @@ export class Viewport {
   }
 
   private buildGuides() {
-    this.guides.traverse((o) => { if (o instanceof THREE.LineSegments) o.geometry.dispose(); });
+    this.guides.traverse((o) => {
+      if (o instanceof THREE.LineSegments) o.geometry.dispose();
+    });
     this.guides.clear();
     const g = editor.grid;
     const minor: number[] = [];
@@ -298,8 +344,54 @@ export class Viewport {
     this.guides.add(lines(minor, COLORS.grid), lines(major, COLORS.gridMajor));
     const { sx, sy, sz } = g;
     const b = [
-      0, 0, sz, sx, 0, sz, sx, 0, sz, sx, sy, sz, sx, sy, sz, 0, sy, sz, 0, sy, sz, 0, 0, sz,
-      0, 0, 0, 0, 0, sz, sx, 0, 0, sx, 0, sz, sx, sy, 0, sx, sy, sz, 0, sy, 0, 0, sy, sz,
+      0,
+      0,
+      sz,
+      sx,
+      0,
+      sz,
+      sx,
+      0,
+      sz,
+      sx,
+      sy,
+      sz,
+      sx,
+      sy,
+      sz,
+      0,
+      sy,
+      sz,
+      0,
+      sy,
+      sz,
+      0,
+      0,
+      sz,
+      0,
+      0,
+      0,
+      0,
+      0,
+      sz,
+      sx,
+      0,
+      0,
+      sx,
+      0,
+      sz,
+      sx,
+      sy,
+      0,
+      sx,
+      sy,
+      sz,
+      0,
+      sy,
+      0,
+      0,
+      sy,
+      sz,
     ];
     this.guides.add(lines(b, COLORS.bounds));
     // Axis hints from the origin, colored like the view cube: X red, Y green along the floor, Z blue up the
@@ -311,15 +403,21 @@ export class Viewport {
     this.setMirror(app.mirror);
   }
 
-  /** Points the camera at the whole model from a pleasant 3/4 angle. */
-  frame() {
-    this.cancelSnap();
+  /** Camera position and target that show the whole model from a pleasant 3/4 angle. */
+  private framePose(): { position: THREE.Vector3; target: THREE.Vector3 } {
     const g = editor.grid;
     const target = new THREE.Vector3(g.sx / 2, g.sy / 2, Math.min(g.sz, Math.max(g.sx, g.sy)) / 4);
     const diag = Math.hypot(g.sx, g.sy, g.sz);
     // From the front-right-top (+X, -Y, +Z), the usual CAD home view.
     const dir = new THREE.Vector3(0.55, -1, 0.75).normalize();
-    this.camera.position.copy(target).addScaledVector(dir, diag * 1.55 + 4);
+    return { position: target.clone().addScaledVector(dir, diag * 1.55 + 4), target };
+  }
+
+  /** Points the camera at the whole model from a pleasant 3/4 angle. */
+  frame() {
+    this.cancelSnap();
+    const { position, target } = this.framePose();
+    this.camera.position.copy(position);
     this.controls.target.copy(target);
     this.controls.update();
     this.requestRender();
@@ -359,8 +457,53 @@ export class Viewport {
     this.snapRaf = 0;
   }
 
+  /**
+   * PNG of the 3D view as base64 (no `data:` prefix), longest side at most
+   * `maxPx`. 'overview' uses a temporary framed camera and hides the editing
+   * overlays, leaving the user's view untouched. Null while the view has no
+   * on-screen size (hidden, or not laid out yet); a minimized window still renders.
+   */
+  snapshot(view: SnapshotView, maxPx: number): string | null {
+    // The canvas keeps its last size when hidden, so the container is what tells.
+    if (!this.container.clientWidth || !this.container.clientHeight) return null;
+    const src = this.renderer.domElement;
+    if (this.dirtyChunks.size) this.flushChunks();
+    const isOverview = view === 'overview';
+    const camera = isOverview ? this.overviewCamera() : this.camera;
+    const overlays = isOverview ? this.visibleOverlays() : [];
+    for (const o of overlays) o.visible = false;
+    // Copy right after rendering: without preserveDrawingBuffer the buffer is cleared once shown.
+    this.renderer.render(this.scene, camera);
+    for (const o of overlays) o.visible = true;
+    const scale = Math.min(1, maxPx / Math.max(src.width, src.height));
+    const out = document.createElement('canvas');
+    out.width = Math.round(src.width * scale);
+    out.height = Math.round(src.height * scale);
+    const ctx2d = out.getContext('2d');
+    if (!ctx2d) throw new Error('This system cannot create a 2D canvas to scale the snapshot');
+    ctx2d.drawImage(src, 0, 0, out.width, out.height);
+    // Put the user's own view back before the browser shows this frame.
+    if (camera !== this.camera) this.renderer.render(this.scene, this.camera);
+    return out.toDataURL('image/png').slice(PNG_DATA_URL_PREFIX.length);
+  }
+
+  /** Cursor ghosts, the box preview and the layer slice plane that are currently shown. */
+  private visibleOverlays(): THREE.Object3D[] {
+    return [...this.ghosts, this.boxPreview, this.slicePlane].filter((o) => o.visible);
+  }
+
+  private overviewCamera(): THREE.PerspectiveCamera {
+    const camera = this.camera.clone();
+    const { position, target } = this.framePose();
+    camera.position.copy(position);
+    camera.lookAt(target);
+    camera.updateMatrixWorld();
+    return camera;
+  }
+
   private resize() {
-    const w = this.container.clientWidth, h = this.container.clientHeight;
+    const w = this.container.clientWidth,
+      h = this.container.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = '100%';
@@ -371,10 +514,10 @@ export class Viewport {
   }
 
   requestRender() {
-    if (this.frameRequested) return;
-    this.frameRequested = true;
+    if (this.isFrameRequested) return;
+    this.isFrameRequested = true;
     requestAnimationFrame(() => {
-      this.frameRequested = false;
+      this.isFrameRequested = false;
       if (this.dirtyChunks.size) this.flushChunks();
       this.renderer.render(this.scene, this.camera);
     });
@@ -398,9 +541,9 @@ export class Viewport {
   /**
    * Cell in layer `axis = coord` under the pointer, found by intersecting the ray with
    * the plane of the face the drag started on (`plane`), so it matches what was clicked.
-   * With `clamp`, positions outside the grid snap to its border; otherwise they return null.
+   * With `shouldClamp`, positions outside the grid snap to its border; otherwise they return null.
    */
-  private planeCell(e: PointerEvent, axis: number, plane: number, coord: number, clamp: boolean): Vec3 | null {
+  private planeCell(e: PointerEvent, axis: number, plane: number, coord: number, shouldClamp: boolean): Vec3 | null {
     const { o, d } = this.ray(e);
     const t = rayPlane(o, d, axis, plane);
     if (t === null) return null;
@@ -409,7 +552,7 @@ export class Viewport {
     const dims = [g.sx, g.sy, g.sz];
     for (let k = 0; k < 3; k++) {
       if (c[k] < 0 || c[k] >= dims[k]) {
-        if (!clamp) return null;
+        if (!shouldClamp) return null;
         c[k] = Math.max(0, Math.min(dims[k] - 1, c[k]));
       }
     }
@@ -418,7 +561,7 @@ export class Viewport {
 
   private onDown(e: PointerEvent) {
     this.cancelSnap();
-    if (e.button !== 0 || this.orbitHeld) return;
+    if (e.button !== 0 || this.isOrbitHeld) return;
     const hit = this.hit(e);
     const tool = app.tool;
     this.renderer.domElement.setPointerCapture(e.pointerId);
@@ -479,15 +622,16 @@ export class Viewport {
       this.showTarget(c);
       return;
     }
-    const hit = this.orbitHeld ? null : this.hit(e);
-    const placing = app.tool === 'place' || (app.tool === 'box' && app.boxMode === 'add');
-    this.showTarget(hit ? (placing ? hit.place : hit.cell) : null);
+    const hit = this.isOrbitHeld ? null : this.hit(e);
+    const isPlacing = app.tool === 'place' || (app.tool === 'box' && app.boxMode === 'add');
+    this.showTarget(hit ? (isPlacing ? hit.place : hit.cell) : null);
   }
 
   private onUp(e: PointerEvent) {
     const drag = this.drag;
     this.drag = null;
-    if (this.renderer.domElement.hasPointerCapture(e.pointerId)) this.renderer.domElement.releasePointerCapture(e.pointerId);
+    if (this.renderer.domElement.hasPointerCapture(e.pointerId))
+      this.renderer.domElement.releasePointerCapture(e.pointerId);
     if (!drag) return;
     if (drag.kind === 'stroke') editor.endStroke();
     if (drag.kind === 'box') {
@@ -502,12 +646,13 @@ export class Viewport {
     if (d?.kind !== 'box') return;
     const cells = boxRegion(d.start, d.end, d.axis, d.sign, app.boxHeight);
     if (!cells.length) return;
-    const lo = cells[0], hi = cells[cells.length - 1];
+    const lo = cells[0],
+      hi = cells[cells.length - 1];
     const size = [0, 1, 2].map((k) => hi[k] - lo[k] + 1);
     this.boxPreview.scale.set(size[0] + 0.04, size[1] + 0.04, size[2] + 0.04);
     this.boxPreview.position.set(lo[0] + size[0] / 2, lo[1] + size[1] / 2, lo[2] + size[2] / 2);
     const mat = this.boxPreview.material as THREE.MeshBasicMaterial;
-    mat.color.setHex(d.mode === 'erase' ? COLORS.erase : editor.palette[app.color] ?? COLORS.place);
+    mat.color.setHex(d.mode === 'erase' ? COLORS.erase : (editor.palette[app.color] ?? COLORS.place));
     this.boxPreview.visible = true;
     this.showTarget(null);
     this.requestRender();
@@ -517,8 +662,12 @@ export class Viewport {
     app.hover = cell;
     const cells = cell ? mirrorCells(editor.grid, [cell], app.mirror) : [];
     const tool = app.tool;
-    const color = tool === 'erase' || (tool === 'box' && app.boxMode === 'erase') ? COLORS.erase
-      : tool === 'place' || tool === 'box' ? COLORS.place : COLORS.other;
+    const color =
+      tool === 'erase' || (tool === 'box' && app.boxMode === 'erase')
+        ? COLORS.erase
+        : tool === 'place' || tool === 'box'
+          ? COLORS.place
+          : COLORS.other;
     this.ghosts.forEach((g, i) => {
       const c = cells[i];
       g.visible = !!c;
@@ -531,20 +680,20 @@ export class Viewport {
     this.requestRender();
   }
 
-  private setOrbitHeld(held: boolean) {
-    if (held === this.orbitHeld) return;
-    this.orbitHeld = held;
-    this.controls.mouseButtons.LEFT = held ? THREE.MOUSE.ROTATE : null;
-    this.renderer.domElement.style.cursor = held ? 'grab' : '';
-    if (held) this.showTarget(null);
+  private setOrbitHeld(isHeld: boolean) {
+    if (isHeld === this.isOrbitHeld) return;
+    this.isOrbitHeld = isHeld;
+    this.controls.mouseButtons.LEFT = isHeld ? THREE.MOUSE.ROTATE : null;
+    this.renderer.domElement.style.cursor = isHeld ? 'grab' : '';
+    if (isHeld) this.showTarget(null);
   }
 
-  private onKey(e: KeyboardEvent, down: boolean) {
+  private onKey(e: KeyboardEvent, isDown: boolean) {
     const target = e.target as HTMLElement | null;
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
     if (e.code === 'Space' || e.key === 'Alt') {
       if (e.code === 'Space' || e.key === 'Alt') e.preventDefault();
-      if (!this.drag) this.setOrbitHeld(down);
+      if (!this.drag) this.setOrbitHeld(isDown);
     }
   }
 }

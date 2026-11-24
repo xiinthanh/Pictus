@@ -35,7 +35,11 @@ export function modelXml(bodies: Body[], palette: Palette, scale: number, name: 
   out.push('  </basematerials>');
   bodies.forEach((b, k) => {
     const label = b.color ? `Color ${b.color} #${hex6(palette[b.color])}` : escapeXml(name);
-    out.push(`  <object id="${k + 2}" type="model" pid="1" pindex="${k}" name="${label}">`, '   <mesh>', '    <vertices>');
+    out.push(
+      `  <object id="${k + 2}" type="model" pid="1" pindex="${k}" name="${label}">`,
+      '   <mesh>',
+      '    <vertices>',
+    );
     const p = b.positions;
     for (let i = 0; i < p.length; i += 3) {
       out.push(`     <vertex x="${num(p[i] * scale)}" y="${num(p[i + 1] * scale)}" z="${num(p[i + 2] * scale)}"/>`);

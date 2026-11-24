@@ -13,12 +13,22 @@ export function writeStl(bodies: Body[], scale: number): Uint8Array {
   for (const b of bodies) {
     const p = b.positions;
     for (let t = 0; t < b.indices.length; t += 3) {
-      const ia = b.indices[t] * 3, ib = b.indices[t + 1] * 3, ic = b.indices[t + 2] * 3;
-      const ux = p[ib] - p[ia], uy = p[ib + 1] - p[ia + 1], uz = p[ib + 2] - p[ia + 2];
-      const vx = p[ic] - p[ia], vy = p[ic + 1] - p[ia + 1], vz = p[ic + 2] - p[ia + 2];
-      let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      const ia = b.indices[t] * 3,
+        ib = b.indices[t + 1] * 3,
+        ic = b.indices[t + 2] * 3;
+      const ux = p[ib] - p[ia],
+        uy = p[ib + 1] - p[ia + 1],
+        uz = p[ib + 2] - p[ia + 2];
+      const vx = p[ic] - p[ia],
+        vy = p[ic + 1] - p[ia + 1],
+        vz = p[ic + 2] - p[ia + 2];
+      let nx = uy * vz - uz * vy,
+        ny = uz * vx - ux * vz,
+        nz = ux * vy - uy * vx;
       const len = Math.hypot(nx, ny, nz) || 1;
-      nx /= len; ny /= len; nz /= len;
+      nx /= len;
+      ny /= len;
+      nz /= len;
       view.setFloat32(o, nx, true);
       view.setFloat32(o + 4, ny, true);
       view.setFloat32(o + 8, nz, true);

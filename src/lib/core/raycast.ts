@@ -65,7 +65,7 @@ export function raycast(grid: VoxelGrid, o: Vec3, d: Vec3, maxZ = grid.sz - 1): 
     if (z <= maxZ && grid.data[grid.index(x, y, z)] !== 0) {
       const p: Vec3 = [x + normal[0], y + normal[1], z + normal[2]];
       const hasNormal = normal[0] !== 0 || normal[1] !== 0 || normal[2] !== 0;
-      const place = hasNormal && grid.inBounds(p[0], p[1], p[2]) && p[2] <= maxZ ? p : null;
+      const place = hasNormal && grid.isInBounds(p[0], p[1], p[2]) && p[2] <= maxZ ? p : null;
       return { cell: [x, y, z], normal, place, t };
     }
     const a = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : tMax[1] < tMax[2] ? 1 : 2;

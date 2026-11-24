@@ -10,7 +10,7 @@ function bigModel(): VoxelGrid {
     for (let y = 0; y < 128; y++)
       for (let x = 0; x < 128; x++) {
         const d = Math.hypot(x - 64, y - 64, z - 64);
-        if (d < 60 && (d > 50 || (x + y + z) % 7 === 0)) g.set(x, y, z, 1 + ((x >> 4) + (y >> 4)) % 4);
+        if (d < 60 && (d > 50 || (x + y + z) % 7 === 0)) g.set(x, y, z, 1 + (((x >> 4) + (y >> 4)) % 4));
       }
   return g;
 }
@@ -37,7 +37,9 @@ describe('performance at the 128³ limit', () => {
     console.log(`per-color export meshes: ${(performance.now() - t).toFixed(0)} ms, ${bodies.length} bodies`);
     t = performance.now();
     const r = analyze(g);
-    console.log(`print analysis: ${(performance.now() - t).toFixed(0)} ms, ${r.parts.length} parts, ${r.contacts.length} contacts`);
+    console.log(
+      `print analysis: ${(performance.now() - t).toFixed(0)} ms, ${r.parts.length} parts, ${r.contacts.length} contacts`,
+    );
     expect(m.indices.length).toBeGreaterThan(0);
   }, 60_000);
 });

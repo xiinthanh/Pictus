@@ -7,7 +7,7 @@
   let report = $state<PrintReport>(analyze(editor.grid));
   let checkedRev = $state(app.rev);
   let shown = $state<string | null>(null);
-  const stale = $derived(app.rev !== checkedRev);
+  const isStale = $derived(app.rev !== checkedRev);
 
   function recheck() {
     report = analyze(editor.grid);
@@ -15,10 +15,20 @@
     show(null, []);
   }
 
+  /** The highlight this panel last set; any other value was set elsewhere (e.g. by the AI). */
+  let ownHighlight: Vec3[] | null = null;
+
   function show(id: string | null, cells: Vec3[]) {
     shown = id;
     app.highlight = cells;
+    // Read back: the state stores its own proxy of `cells`, which is what later reads return.
+    ownHighlight = app.highlight;
   }
+
+  // Someone else replaced the highlight, so none of this panel's "Show" buttons is on any more.
+  $effect(() => {
+    if (app.highlight !== ownHighlight) shown = null;
+  });
 
   function toggle(id: string, cells: () => Vec3[]) {
     if (shown === id) show(null, []);
@@ -30,12 +40,16 @@
   }
 
   function contactCells(): Vec3[] {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local de-dup set, never rendered or stored
     const seen = new Set<string>();
     const out: Vec3[] = [];
     for (const v of report.contacts)
       for (const c of cellsAtVertex(editor.grid, v)) {
         const key = c.join(',');
-        if (!seen.has(key)) { seen.add(key); out.push(c); }
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push(c);
+        }
       }
     return out;
   }
@@ -67,7 +81,7 @@
 
   function close() {
     app.highlight = [];
-    app.checkOpen = false;
+    app.isCheckOpen = false;
   }
 </script>
 
@@ -78,7 +92,7 @@
     <button class="icon" onclick={close} title="Close" aria-label="Close"><Icon name="close" size={16} /></button>
   </div>
 
-  {#if stale}
+  {#if isStale}
     <div class="stale row">The model changed. <button onclick={recheck}>Check again</button></div>
   {/if}
 
@@ -97,7 +111,13 @@
               <span>{k === 0 ? 'Main body' : `Part ${k + 1}`}</span>
               <span class="muted">{p.size} voxels</span>
               <span class="spacer"></span>
-              <button class="small-btn" class:active={shown === `p${k}`} onclick={() => toggle(`p${k}`, () => partCells(k))}>Show</button>
+              <button
+                class="small-btn"
+                class:active={shown === `p${k}`}
+                onclick={() => toggle(`p${k}`, () => partCells(k))}
+              >
+                Show
+              </button>
               {#if k > 0}<button class="small-btn" onclick={() => removePart(k)}>Delete</button>{/if}
             </li>
           {/each}
@@ -112,7 +132,9 @@
         <p class="ok">✓ No edge or corner-only contacts</p>
       {:else}
         <p class="warn">⚠ {report.contacts.length} thin contacts</p>
-        <p class="muted small">Voxels touching only at an edge or corner make weak, zero-width joints that slicers flag as errors.</p>
+        <p class="muted small">
+          Voxels touching only at an edge or corner make weak, zero-width joints that slicers flag as errors.
+        </p>
         <div class="row">
           <button class:active={shown === 'c'} onclick={() => toggle('c', contactCells)}>Show</button>
           <button class="primary" onclick={fixContacts}>Fix all</button>

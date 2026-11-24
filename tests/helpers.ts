@@ -25,7 +25,8 @@ export function checkWatertight(b: Body): string | null {
   const tri = b.indices;
   for (let t = 0; t < tri.length; t += 3) {
     for (let k = 0; k < 3; k++) {
-      const a = tri[t + k], c = tri[t + ((k + 1) % 3)];
+      const a = tri[t + k],
+        c = tri[t + ((k + 1) % 3)];
       if (a === c) return `degenerate triangle ${t / 3}`;
       const key = `${a}>${c}`;
       edges.set(key, (edges.get(key) ?? 0) + 1);
@@ -44,10 +45,13 @@ export function volume(b: Body): number {
   const p = b.positions;
   let v = 0;
   for (let t = 0; t < b.indices.length; t += 3) {
-    const a = b.indices[t] * 3, c = b.indices[t + 1] * 3, d = b.indices[t + 2] * 3;
-    v += p[a] * (p[c + 1] * p[d + 2] - p[c + 2] * p[d + 1])
-      - p[a + 1] * (p[c] * p[d + 2] - p[c + 2] * p[d])
-      + p[a + 2] * (p[c] * p[d + 1] - p[c + 1] * p[d]);
+    const a = b.indices[t] * 3,
+      c = b.indices[t + 1] * 3,
+      d = b.indices[t + 2] * 3;
+    v +=
+      p[a] * (p[c + 1] * p[d + 2] - p[c + 2] * p[d + 1]) -
+      p[a + 1] * (p[c] * p[d + 2] - p[c + 2] * p[d]) +
+      p[a + 2] * (p[c] * p[d + 1] - p[c + 1] * p[d]);
   }
   return v / 6;
 }

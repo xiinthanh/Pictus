@@ -3,6 +3,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { confirmDiscard, importImageWithConfirm, newWithConfirm, openFile, save, saveAs } from '$lib/actions';
   import { redo, undo } from '$lib/editing';
+  import { startAtLaunch, stopAtTeardown } from '$lib/mcp/bridge';
   import { startupFile } from '$lib/platform/files';
   import { app, editor, TOOLS } from '$lib/state/app.svelte';
   import ConfirmDialog from '$lib/ui/ConfirmDialog.svelte';
@@ -18,22 +19,24 @@
   import ViewportView from '$lib/ui/ViewportView.svelte';
 
   let viewport: ViewportView | undefined = $state();
-  const title = $derived(`${app.dirty ? '• ' : ''}${app.docName} — Pictus`);
+  const title = $derived(`${app.isDirty ? '• ' : ''}${app.docName} — Pictus`);
 
   $effect(() => {
     document.title = title;
-    getCurrentWindow().setTitle(title).catch(() => {});
+    getCurrentWindow()
+      .setTitle(title)
+      .catch(() => {});
   });
 
   onMount(() => {
     let unlisten: (() => void) | undefined;
-    let closing = false;
+    let isClosing = false;
     getCurrentWindow()
       .onCloseRequested(async (event) => {
-        if (closing) return;
+        if (isClosing) return;
         event.preventDefault();
         if (await confirmDiscard()) {
-          closing = true;
+          isClosing = true;
           await getCurrentWindow().destroy();
         }
       })
@@ -42,16 +45,20 @@
     startupFile().then((p) => {
       if (p) openFile(p, true);
     });
-    return () => unlisten?.();
+    startAtLaunch();
+    return () => {
+      unlisten?.();
+      stopAtTeardown();
+    };
   });
 
   function onkeydown(e: KeyboardEvent) {
     const t = e.target as HTMLElement | null;
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
     if (app.dialog || app.confirm) return;
-    const ctrl = e.ctrlKey || e.metaKey;
+    const isCtrlDown = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
-    if (ctrl) {
+    if (isCtrlDown) {
       const actions: Record<string, () => unknown> = {
         z: () => (e.shiftKey ? redo() : undo()),
         y: redo,
@@ -70,11 +77,11 @@
     const tool = TOOLS.find((x) => x.key === e.key);
     if (tool) app.tool = tool.id;
     else if (k === 'f') viewport?.frame();
-    else if (k === 'l') app.layerMode = !app.layerMode;
-    else if (e.key === 'PageUp' || (app.layerMode && e.key === 'ArrowUp')) {
+    else if (k === 'l') app.isLayerMode = !app.isLayerMode;
+    else if (e.key === 'PageUp' || (app.isLayerMode && e.key === 'ArrowUp')) {
       e.preventDefault();
       app.layer = Math.min(editor.grid.sz - 1, app.layer + 1);
-    } else if (e.key === 'PageDown' || (app.layerMode && e.key === 'ArrowDown')) {
+    } else if (e.key === 'PageDown' || (app.isLayerMode && e.key === 'ArrowDown')) {
       e.preventDefault();
       app.layer = Math.max(0, app.layer - 1);
     } else if (e.key === 'Escape') {
@@ -91,8 +98,8 @@
     <Toolbar />
     <div class="views">
       <ViewportView bind:this={viewport} />
-      {#if app.layerMode}<SliceView />{/if}
-      {#if app.checkOpen}<PrintCheckPanel />{/if}
+      {#if app.isLayerMode}<SliceView />{/if}
+      {#if app.isCheckOpen}<PrintCheckPanel />{/if}
     </div>
     <SidePanel />
   </div>

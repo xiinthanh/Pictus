@@ -7,7 +7,9 @@
   import { app, editor } from '$lib/state/app.svelte';
   import Modal from './Modal.svelte';
 
-  let source = $state<{ name: string; w: number; h: number; rgba: Uint8Array; origW: number; origH: number } | null>(null);
+  let source = $state<{ name: string; w: number; h: number; rgba: Uint8Array; origW: number; origH: number } | null>(
+    null,
+  );
   let opts = $state<ImageOptions>({ ...DEFAULT_IMAGE_OPTIONS });
   let error = $state('');
   let preview: HTMLCanvasElement | undefined = $state();
@@ -25,7 +27,14 @@
       const ctx = c.getContext('2d')!;
       ctx.drawImage(bitmap, 0, 0);
       const data = ctx.getImageData(0, 0, c.width, c.height).data;
-      source = { name: stripExt(baseName(p)), w: c.width, h: c.height, rgba: new Uint8Array(data), origW: c.width, origH: c.height };
+      source = {
+        name: stripExt(baseName(p)),
+        w: c.width,
+        h: c.height,
+        rgba: new Uint8Array(data),
+        origW: c.width,
+        origH: c.height,
+      };
     } catch (e) {
       error = `Could not read the image: ${errorText(e)}`;
       source = null;
@@ -37,7 +46,7 @@
     if (!source) return null;
     const { w, h } = fitSize(source.w, source.h, opts);
     const rgba = w === source.w && h === source.h ? source.rgba : resizeNearest(source.rgba, source.w, source.h, w, h);
-    return { w, h, rgba, scaled: w !== source.w || h !== source.h };
+    return { w, h, rgba, isScaled: w !== source.w || h !== source.h };
   });
 
   const result = $derived.by((): { model: Model | null; error: string } => {
@@ -86,7 +95,9 @@
       </div>
       <div class="form">
         <label class="row">Pixel height <input type="number" min="1" max="64" bind:value={opts.depth} /> voxels</label>
-        <label class="row">Base plate <input type="number" min="0" max="16" bind:value={opts.plateThickness} /> voxels thick</label>
+        <label class="row">
+          Base plate <input type="number" min="0" max="16" bind:value={opts.plateThickness} /> voxels thick
+        </label>
         {#if opts.plateThickness > 0}
           <label class="row">
             Plate shape
@@ -97,24 +108,35 @@
           </label>
           <label class="row">Border <input type="number" min="0" max="16" bind:value={opts.margin} /> voxels</label>
         {/if}
-        {#if opts.plateThickness > 0 || opts.keyring}
+        {#if opts.plateThickness > 0 || opts.hasKeyring}
           <label class="row">
             Plate color
-            <input type="color" value={toCss(opts.plateColor)} oninput={(e) => (opts.plateColor = fromCss(e.currentTarget.value))} />
+            <input
+              type="color"
+              value={toCss(opts.plateColor)}
+              oninput={(e) => (opts.plateColor = fromCss(e.currentTarget.value))}
+            />
           </label>
         {/if}
-        <label class="row check"><input type="checkbox" bind:checked={opts.keyring} /> Add keyring loop</label>
+        <label class="row check"><input type="checkbox" bind:checked={opts.hasKeyring} /> Add keyring loop</label>
       </div>
     </div>
-    {#if fitted.scaled}<p class="note">The image was scaled down to {fitted.w}×{fitted.h} px to fit the 128-voxel limit.</p>{/if}
+    {#if fitted.isScaled}<p class="note">
+        The image was scaled down to {fitted.w}×{fitted.h} px to fit the 128-voxel limit.
+      </p>{/if}
     {#if result.model}
       {@const g = result.model.grid}
-      <p class="muted">Result: {g.sx}×{g.sy}×{g.sz} voxels · {mm(g.sx)}×{mm(g.sy)}×{mm(g.sz)} mm · {result.model.palette.length - 1} colors</p>
+      <p class="muted">
+        Result: {g.sx}×{g.sy}×{g.sz} voxels · {mm(g.sx)}×{mm(g.sy)}×{mm(g.sz)} mm · {result.model.palette.length - 1} colors
+      </p>
     {:else if result.error}
       <p class="err">{result.error}</p>
     {/if}
   {:else}
-    <p class="muted">Pick a small pixel-art image (PNG works best). Each opaque pixel becomes a column of voxels; transparent pixels stay empty.</p>
+    <p class="muted">
+      Pick a small pixel-art image (PNG works best). Each opaque pixel becomes a column of voxels; transparent pixels
+      stay empty.
+    </p>
   {/if}
 
   {#snippet footer()}
@@ -136,10 +158,13 @@
     place-items: center;
     border-radius: 8px;
     background-color: #2a2d34;
-    background-image: linear-gradient(45deg, #23262c 25%, transparent 25%, transparent 75%, #23262c 75%),
+    background-image:
+      linear-gradient(45deg, #23262c 25%, transparent 25%, transparent 75%, #23262c 75%),
       linear-gradient(45deg, #23262c 25%, transparent 25%, transparent 75%, #23262c 75%);
     background-size: 16px 16px;
-    background-position: 0 0, 8px 8px;
+    background-position:
+      0 0,
+      8px 8px;
   }
   .preview canvas {
     max-width: 184px;

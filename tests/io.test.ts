@@ -29,7 +29,8 @@ describe('.vox', () => {
     expect(warnings).toEqual([]);
     // Palette is compacted to used colors, so compare colors rather than indices.
     for (let i = 0; i < grid.data.length; i++) {
-      const a = grid.data[i], b = model.grid.data[i];
+      const a = grid.data[i],
+        b = model.grid.data[i];
       expect(a === 0 ? 0 : palette[a]).toBe(b === 0 ? 0 : model.palette[b]);
     }
   });
@@ -42,8 +43,7 @@ describe('.vox', () => {
 describe('image import', () => {
   // 3×2 image: red, transparent, blue / green, green, green
   const px = new Uint8Array([
-    255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 255, 255,
-    0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255,
+    255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 255, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255,
   ]);
 
   it('extrudes opaque pixels with the top row at the top', () => {
@@ -63,16 +63,17 @@ describe('image import', () => {
   });
 
   it('adds a keyring loop with a hole', () => {
-    const m = imageToModel(px, 3, 2, { ...DEFAULT_IMAGE_OPTIONS, keyring: true });
+    const m = imageToModel(px, 3, 2, { ...DEFAULT_IMAGE_OPTIONS, hasKeyring: true });
     expect(m.grid.sy).toBeGreaterThan(4);
     const cx = Math.floor(m.grid.sx / 2);
     // Somewhere in the ring column there is a hole above solid ring material.
-    let sawHole = false, sawRing = false;
+    let hasSeenHole = false,
+      hasSeenRing = false;
     for (let y = 4; y < m.grid.sy; y++) {
-      if (m.grid.get(cx, y, 0)) sawRing = true;
-      else if (sawRing) sawHole = true;
+      if (m.grid.get(cx, y, 0)) hasSeenRing = true;
+      else if (hasSeenRing) hasSeenHole = true;
     }
-    expect(sawRing && sawHole).toBe(true);
+    expect(hasSeenRing && hasSeenHole).toBe(true);
   });
 
   it('quantizes to the color limit', () => {

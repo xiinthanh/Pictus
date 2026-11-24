@@ -9,22 +9,16 @@ This records where the implementation stands against [PLAN.md](PLAN.md): what is
 | | Status |
 | --- | --- |
 | Code for milestones M1–M7 | Written |
-| Core unit tests | 38/38 pass (`pnpm test`) |
-| Rust unit test | 1/1 passes (`cargo test`) |
+| AI editing over MCP | Written on branch `feat/mcp` (see [AI editing (MCP)](#ai-editing-mcp)) |
+| Unit tests (`pnpm test`) | 175/175 pass |
+| Lint and format (`pnpm lint`, `pnpm format:check`) | Pass |
 | Type-check (`pnpm check`) | 0 errors, 0 warnings |
 | Frontend build (`pnpm build`) | Succeeds |
-| App run in Tauri (`pnpm tauri dev`) | Runs; live UI tests pass after one fix (see [Live UI testing](#live-ui-testing)) |
-| Installer (`pnpm tauri build`) | Built and installed; double-clicking a `.pictus` file opens it in Pictus |
+| Rust build and tests (`cargo build`, `cargo test`) | Succeed; 10/10 tests pass. Uses the MSVC toolchain from Visual Studio Community 2026 |
+| App run in Tauri (`pnpm tauri dev`) | Runs; live UI tests pass after one fix (see [Live UI testing](#live-ui-testing)); exercised while building the MCP feature, no full manual pass yet |
+| Installer (`pnpm tauri build`) | Built and installed before the MCP work; double-clicking a `.pictus` file opens it in Pictus. **Not yet rebuilt with the MCP code** |
 | Slicer check of exports | **Not yet done** |
-| Git | 7 feature commits, the viewport fix, and doc updates |
-
-## Build environment
-
-Rust needs the MSVC linker from the Visual Studio Build Tools **"Desktop development with C++"** workload (`Microsoft.VisualStudio.Workload.VCTools`). It was missing at first: the build then picked up Cygwin's `C:\cygwin64\bin\link.exe` and failed with `link: extra operand ...`. The workload is now installed and the build works. To set up another machine:
-
-```powershell
-& "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive
-```
+| Git | Committed: `master`, plus the `feat/mcp` branch |
 
 ## Milestone status
 
@@ -83,11 +77,55 @@ Rust needs the MSVC linker from the Visual Studio Build Tools **"Desktop develop
 4. **Edge/corner contacts.** The export is made watertight by splitting vertices. The geometric fix (adding voxels) is a separate, user-triggered action in the print check.
 5. **`.pictus` voxels are deflated directly**, with no separate RLE pass.
 
+## AI editing (MCP)
+
+Pictus runs a local MCP server (Streamable HTTP) so Claude Code can edit the open model. It is off by default and turned on with the menu's **Connect AI** button. See the README for the user steps.
+
+```
+Claude Code --POST /mcp--> Rust relay (tiny_http, 127.0.0.1:47821)
+                             checks path, method, Origin, token, size
+                             emits "mcp-request" {id, body, MCP headers}
+                                   v
+                           TS: bridge.ts -> protocol.ts -> tools -> Editor
+                             invoke("mcp_respond", {id, status, body})
+Claude Code <---answer---- Rust relay
+```
+
+**Rust is a dumb relay.** All protocol and tool logic is TypeScript, so it reuses `Editor` and `core/` and is covered by vitest.
+
+| Path | Contents |
+| --- | --- |
+| `src-tauri/src/mcp.rs` | `mcp_start` / `mcp_stop` / `mcp_respond`. 127.0.0.1 only; 401 without the bearer token (constant-time compare), 403 for any `Origin`, 404/405/413 (4 MB) for bad requests, 504 if the window doesn't answer within 60 s. One request at a time. |
+| `src/lib/mcp/protocol.ts` | JSON-RPC and MCP, dual-era: 2026-07-28 (`_meta` version, `server/discover`, header checks, `ttlMs`/`cacheScope` on discover and `tools/list`) and the older `initialize` handshake (2025-03-26 to 2025-11-25). Tool failures come back as `isError: true` results. |
+| `src/lib/mcp/tools.ts` | `ToolCtx` (everything a tool may touch), `get_model`, `get_layer`, and the tool list. |
+| `src/lib/mcp/editTools.ts` | `set_voxels` (up to 20,000 cells), `fill_box`, `fix_thin_contacts`, `new_model`, `set_color`, `undo`. |
+| `src/lib/mcp/inspectTools.ts` | `print_check` (lists up to 50 problems, highlights up to 20,000 cells), `snapshot` (PNG, longest side 768 px). |
+| `src/lib/mcp/args.ts` | Argument checks with error messages that name the argument, the allowed range and the value received. |
+| `src/lib/mcp/settings.ts` | Saved setting `{isEnabled, token}` (`localStorage` key `pictus.mcp`), 32-byte hex token, the `claude mcp add` command. |
+| `src/lib/mcp/bridge.ts` | Event listener, start/stop (serialized), Connect AI button, reconnect at launch, and the live `ToolCtx`. |
+
+Rules the tools follow:
+
+- **One call is one undo step** (`beginStroke` / `endStroke`), and every argument is checked before anything changes.
+- **Refused while busy:** while the user is mid-stroke, or a dialog, confirm box, file picker or save is open (`app.busyTasks`).
+- **The AI's `undo` only reverts AI steps.** They are tracked by identity against `History.lastUndo`; a user's step on top is never undone.
+- **After an AI edit changes cells,** the print-check highlight is cleared, so a later snapshot doesn't show fixed problems.
+- **Snapshots** render the view and downscale it to a 2D canvas. `overview` uses a cloned 3/4 camera and hides the cursors and slice plane; the user's camera never moves. In layer view the reply adds a note that the upper layers are hidden.
+- **No file tools.** The AI can't open, save or export.
+- **Dev shortcut:** `VITE_PICTUS_MCP_TOKEN=<token> pnpm tauri dev` connects at launch with that token. It is ignored in release builds.
+
+Checked in the running app with Claude Code:
+
+- curl: 200 / 202 / 401 / 403 / 404 / 405 / 413 / 400, and parallel requests.
+- Claude Code: reading the model, drawing a mushroom, undo, snapshot, print check and fixing.
+- Ctrl+Z removes AI steps. AI edits are refused while a confirm box or Save As is open.
+- Snapshot works with the window minimized, and is correct in layer view.
+
 ## Verification
 
 ### Done (automated)
 
-- **Unit tests: 38/38 pass.** They cover:
+- **Unit tests: 175/175 pass.** Besides the MCP specs (protocol, every tool, argument errors, settings), they cover:
   - grid indexing, bounds and resizing
   - undo/redo strokes, and dropping strokes that change nothing
   - mirroring, flood fill, box and line helpers
@@ -161,6 +199,9 @@ Both installers are well under the ~10 MB target. The installer was run on the d
 
 ### Not done yet
 
+- A full manual pass over the app: 3D view, tools, 2D layer editor, dialogs, saving, the close prompt, "open with".
+- The **Connect AI** button in an installed build: first-time registration and reconnecting at launch.
+- `pnpm tauri build` with the MCP code: install and double-click a `.pictus` file again.
 - The native file dialogs themselves (intercepted in the tests above).
 - The view cube inside the Tauri app (`pnpm tauri dev`); so far it has only been tested in a browser.
 - Uninstalling through Settings → Apps.
@@ -184,9 +225,11 @@ Both installers are well under the ~10 MB target. The installer was run on the d
 
 ## Next steps
 
-1. Try the real Open and Export dialogs once in the installed app.
-2. Check memory (target under 200 MB) and frame rate with a full 128³ model on the laptop.
-3. Check exports in a slicer (PrusaSlicer / Bambu Studio / Orca).
-4. Check that uninstalling removes Pictus cleanly.
-5. Consider adding the live UI test as a repeatable script (Playwright over the WebView2 debug port).
-6. Take on the follow-ups above as needed.
+1. Work through the manual checks in [PLAN.md](PLAN.md#tests-and-verification) with `pnpm tauri dev`. Fix whatever turns up.
+2. Run `pnpm tauri build` and test the installer, the file association and the Connect AI button.
+3. Try the real Open and Export dialogs once in the installed app.
+4. Check memory (target under 200 MB) and frame rate with a full 128³ model on the laptop.
+5. Check exports in a slicer (PrusaSlicer / Bambu Studio / Orca).
+6. Check that uninstalling removes Pictus cleanly.
+7. Consider adding the live UI test as a repeatable script (Playwright over the WebView2 debug port).
+8. Take on the follow-ups above as needed.

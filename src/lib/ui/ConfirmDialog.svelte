@@ -10,7 +10,7 @@
   <p>{req.message}</p>
   {#snippet footer()}
     {#each req.buttons as b (b.id)}
-      <button class:primary={b.primary} onclick={() => req.resolve(b.id)}>{b.label}</button>
+      <button class:primary={b.isPrimary} onclick={() => req.resolve(b.id)}>{b.label}</button>
     {/each}
   {/snippet}
 </Modal>

@@ -1,6 +1,8 @@
 //! Pictus native shell. All editing logic lives in the TypeScript frontend;
 //! Rust only provides binary file access and the "open with" startup path.
 
+mod mcp;
+
 use tauri::ipc::{InvokeBody, Request, Response};
 
 /// Reads a whole file and returns it to the frontend as an ArrayBuffer.
@@ -51,7 +53,15 @@ fn decode_hex(s: &str) -> Option<String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_file, write_file, startup_file])
+        .manage(mcp::McpState::default())
+        .invoke_handler(tauri::generate_handler![
+            read_file,
+            write_file,
+            startup_file,
+            mcp::mcp_start,
+            mcp::mcp_stop,
+            mcp::mcp_respond
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Pictus");
 }

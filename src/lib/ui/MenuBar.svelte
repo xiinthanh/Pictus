@@ -1,6 +1,7 @@
 <script lang="ts">
   import { exportVox, importImageWithConfirm, importVox, newWithConfirm, openFile, save, saveAs } from '$lib/actions';
   import { redo, undo } from '$lib/editing';
+  import { toggleConnection } from '$lib/mcp/bridge';
   import { baseName } from '$lib/platform/files';
   import { app, editor } from '$lib/state/app.svelte';
   import Icon from './Icon.svelte';
@@ -13,15 +14,33 @@
     menu = null;
     fn();
   }
+
+  /** A second click while connecting would read the token before the first click saved it. */
+  let isSwitchingAi = $state(false);
+
+  async function switchAi() {
+    isSwitchingAi = true;
+    try {
+      await toggleConnection();
+    } finally {
+      isSwitchingAi = false;
+    }
+  }
 </script>
 
-<svelte:window onpointerdown={(e) => { if (!(e.target as HTMLElement).closest('.menu-root')) menu = null; }} />
+<svelte:window
+  onpointerdown={(e) => {
+    if (!(e.target as HTMLElement).closest('.menu-root')) menu = null;
+  }}
+/>
 
 <header>
   <div class="brand">Pictus</div>
 
   <div class="menu-root">
-    <button class="flat" class:open={menu === 'file'} onclick={() => (menu = menu === 'file' ? null : 'file')}>File</button>
+    <button class="flat" class:open={menu === 'file'} onclick={() => (menu = menu === 'file' ? null : 'file')}>
+      File
+    </button>
     {#if menu === 'file'}
       <div class="dropdown">
         <button onclick={() => run(newWithConfirm)}>New… <kbd>Ctrl+N</kbd></button>
@@ -40,7 +59,9 @@
   </div>
 
   <div class="menu-root">
-    <button class="flat" class:open={menu === 'import'} onclick={() => (menu = menu === 'import' ? null : 'import')}>Import</button>
+    <button class="flat" class:open={menu === 'import'} onclick={() => (menu = menu === 'import' ? null : 'import')}>
+      Import
+    </button>
     {#if menu === 'import'}
       <div class="dropdown">
         <button onclick={() => run(importImageWithConfirm)}>Pixel art image…</button>
@@ -56,10 +77,24 @@
   <button class="flat icon" title="Undo (Ctrl+Z)" disabled={!canUndo} onclick={undo}><Icon name="undo" /></button>
   <button class="flat icon" title="Redo (Ctrl+Y)" disabled={!canRedo} onclick={redo}><Icon name="redo" /></button>
   <div class="divider"></div>
-  <button class:active={app.checkOpen} onclick={() => (app.checkOpen = !app.checkOpen)} title="Check the model for printing problems">
+  <button
+    class:active={app.isCheckOpen}
+    onclick={() => (app.isCheckOpen = !app.isCheckOpen)}
+    title="Check the model for printing problems"
+  >
     <span class="row"><Icon name="check" size={16} /> Print check</span>
   </button>
-  <button class="primary" onclick={() => (app.dialog = 'export')} title="Export for 3D printing (Ctrl+E)">Export…</button>
+  <button
+    class:active={app.isMcpOn}
+    disabled={isSwitchingAi}
+    onclick={switchAi}
+    title={app.isMcpOn ? 'Claude Code can edit this model. Click to disconnect' : 'Let Claude Code edit this model'}
+  >
+    {app.isMcpOn ? 'AI on' : 'Connect AI'}
+  </button>
+  <button class="primary" onclick={() => (app.dialog = 'export')} title="Export for 3D printing (Ctrl+E)">
+    Export…
+  </button>
 </header>
 
 <style>

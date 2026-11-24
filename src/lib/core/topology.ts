@@ -75,19 +75,24 @@ export function vertexSheets(vx: number, vy: number, vz: number, solidAt: SolidF
     }
   const parent = faceOwner.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  const union = (a: number, b: number) => { parent[find(a)] = find(b); };
+  const union = (a: number, b: number) => {
+    parent[find(a)] = find(b);
+  };
 
   for (let axis = 0; axis < 3; axis++) {
     const eb = 1 << axis;
     for (const side of [0, 1]) {
-      const cells = [0, 1, 2, 3, 4, 5, 6, 7].filter((b) => ((b & eb) ? 1 : 0) === side);
+      const cells = [0, 1, 2, 3, 4, 5, 6, 7].filter((b) => (b & eb ? 1 : 0) === side);
       const faces: number[] = [];
       for (const a of cells)
         for (const c of cells) {
           const f = faceIndex.get(`${a},${c}`);
           if (f !== undefined) faces.push(f);
         }
-      if (faces.length === 2) { union(faces[0], faces[1]); continue; }
+      if (faces.length === 2) {
+        union(faces[0], faces[1]);
+        continue;
+      }
       if (faces.length !== 4) continue;
       // Edge-only contact. Are the two solid cells connected around each end of the edge?
       const solidCells = cells.filter((b) => s[b]);
@@ -101,13 +106,15 @@ export function vertexSheets(vx: number, vy: number, vz: number, solidAt: SolidF
       const nearDelta = side ? -1 : 1;
       const farDelta = side ? 1 : -1;
       const connected = (delta: number) =>
-        shifted(solidCells[0], delta) && shifted(solidCells[1], delta) &&
+        shifted(solidCells[0], delta) &&
+        shifted(solidCells[1], delta) &&
         (shifted(emptyCells[0], delta) || shifted(emptyCells[1], delta));
-      const bySolid = !(connected(nearDelta) && connected(farDelta));
+      const isBySolid = !(connected(nearDelta) && connected(farDelta));
       for (let i = 0; i < 4; i++)
         for (let j = i + 1; j < 4; j++) {
-          const fi = faces[i], fj = faces[j];
-          if (bySolid ? faceOwner[fi] === faceOwner[fj] : faceOut[fi] === faceOut[fj]) union(fi, fj);
+          const fi = faces[i],
+            fj = faces[j];
+          if (isBySolid ? faceOwner[fi] === faceOwner[fj] : faceOut[fi] === faceOut[fj]) union(fi, fj);
         }
     }
   }

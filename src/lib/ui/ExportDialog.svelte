@@ -5,26 +5,22 @@
   import { write3mf } from '$lib/core/export/threemf';
   import { colorBodies, mergedBody } from '$lib/core/mesher';
   import { baseName, errorText, pickSave, stripExt, withExt, writeBytes, writeText } from '$lib/platform/files';
+  import { loadSetting, saveSetting } from '$lib/platform/storage';
   import { app, editor } from '$lib/state/app.svelte';
+  import {
+    DEFAULT_EXPORT_PREFS,
+    EXPORT_PREFS_KEY,
+    parseExportPrefs,
+    type ExportFormat,
+    type ExportPrefs,
+  } from './exportPrefs';
   import Modal from './Modal.svelte';
 
-  type Format = '3mf' | 'stl' | 'obj';
-  const PREFS_KEY = 'pictus.export';
-
-  function loadPrefs(): { format: Format; multi: boolean } {
-    try {
-      const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
-      return { format: ['3mf', 'stl', 'obj'].includes(p.format) ? p.format : '3mf', multi: p.multi !== false };
-    } catch {
-      return { format: '3mf', multi: true };
-    }
-  }
-
-  const prefs = loadPrefs();
-  let format = $state<Format>(prefs.format);
-  let multi = $state(prefs.multi);
+  const prefs: ExportPrefs = loadSetting(EXPORT_PREFS_KEY, parseExportPrefs, { ...DEFAULT_EXPORT_PREFS });
+  let format = $state<ExportFormat>(prefs.format);
+  let isMultiColor = $state(prefs.isMultiColor);
   let voxelSize = $state(editor.voxelSize);
-  let busy = $state(false);
+  let isBusy = $state(false);
 
   const report = analyze(editor.grid);
   const colors = new Set(editor.grid.data).size - (editor.grid.data.includes(0) ? 1 : 0);
@@ -32,7 +28,7 @@
     [editor.grid.sx, editor.grid.sy, editor.grid.sz].map((v) => Math.round(v * voxelSize * 10) / 10).join(' × '),
   );
 
-  const FORMATS: { id: Format; label: string; note: string }[] = [
+  const FORMATS: { id: ExportFormat; label: string; note: string }[] = [
     { id: '3mf', label: '3MF', note: 'Best for slicers. Keeps each color as a separate part.' },
     { id: 'stl', label: 'STL', note: 'Works everywhere. No colors — one file per color if you choose multi-color.' },
     { id: 'obj', label: 'OBJ', note: 'Mesh with color materials (.obj + .mtl).' },
@@ -44,12 +40,12 @@
     const p = await pickSave([{ name: format.toUpperCase(), extensions: [format] }], `${app.docName}${ext}`);
     if (!p) return;
     const path = withExt(p, ext);
-    busy = true;
+    isBusy = true;
     // Let the "Exporting…" state paint before the synchronous meshing work.
     await new Promise((r) => setTimeout(r, 30));
     try {
       editor.setVoxelSize(voxelSize);
-      const bodies = multi && colors > 1 ? colorBodies(editor.grid) : [mergedBody(editor.grid)];
+      const bodies = isMultiColor && colors > 1 ? colorBodies(editor.grid) : [mergedBody(editor.grid)];
       const name = stripExt(baseName(path));
       let written = baseName(path);
       if (format === '3mf') {
@@ -68,27 +64,25 @@
       } else {
         await writeBytes(path, writeStl(bodies, voxelSize));
       }
-      try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify({ format, multi }));
-      } catch {
-        /* ignore */
-      }
-      app.flash(`Exported ${written}`, 6000);
+      // The export itself succeeded; a lost preference only needs mentioning.
+      const prefsFailure = saveSetting(EXPORT_PREFS_KEY, { format, isMultiColor });
+      const note = prefsFailure ? ` (could not remember these export settings: ${prefsFailure})` : '';
+      app.flash(`Exported ${written}${note}`, 6000);
       app.dialog = null;
     } catch (e) {
-      await app.ask('Export failed', errorText(e), [{ id: 'ok', label: 'OK', primary: true }]);
+      await app.ask('Export failed', errorText(e), [{ id: 'ok', label: 'OK', isPrimary: true }]);
     } finally {
-      busy = false;
+      isBusy = false;
     }
   }
 
   function openCheck() {
     app.dialog = null;
-    app.checkOpen = true;
+    app.isCheckOpen = true;
   }
 </script>
 
-<Modal title="Export for 3D printing" onclose={() => !busy && (app.dialog = null)} width={460}>
+<Modal title="Export for 3D printing" onclose={() => !isBusy && (app.dialog = null)} width={460}>
   {#if report.voxels === 0}
     <p class="warn">The model is empty — add some voxels first.</p>
   {:else}
@@ -106,7 +100,7 @@
 
     {#if colors > 1}
       <label class="row check">
-        <input type="checkbox" bind:checked={multi} />
+        <input type="checkbox" bind:checked={isMultiColor} />
         <span>Multi-color: export each of the {colors} colors as its own part</span>
       </label>
     {/if}
@@ -118,8 +112,12 @@
 
     {#if report.parts.length > 1 || report.contacts.length}
       <div class="issues">
-        {#if report.parts.length > 1}<p>⚠ {report.parts.length} separate parts — smaller ones may fall over or get lost.</p>{/if}
-        {#if report.contacts.length}<p>⚠ {report.contacts.length} spots where voxels touch only at an edge or corner — these print weak.</p>{/if}
+        {#if report.parts.length > 1}<p>
+            ⚠ {report.parts.length} separate parts — smaller ones may fall over or get lost.
+          </p>{/if}
+        {#if report.contacts.length}<p>
+            ⚠ {report.contacts.length} spots where voxels touch only at an edge or corner — these print weak.
+          </p>{/if}
         <button onclick={openCheck}>Review in print check</button>
       </div>
     {:else}
@@ -128,9 +126,9 @@
   {/if}
 
   {#snippet footer()}
-    <button onclick={() => (app.dialog = null)} disabled={busy}>Cancel</button>
-    <button class="primary" disabled={busy || report.voxels === 0 || !(voxelSize > 0)} onclick={doExport}>
-      {busy ? 'Exporting…' : 'Export…'}
+    <button onclick={() => (app.dialog = null)} disabled={isBusy}>Cancel</button>
+    <button class="primary" disabled={isBusy || report.voxels === 0 || !(voxelSize > 0)} onclick={doExport}>
+      {isBusy ? 'Exporting…' : 'Export…'}
     </button>
   {/snippet}
 </Modal>
