@@ -1,0 +1,31 @@
+name: Bug report
+description: Something in Pictus doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: And what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. New model 32³
+        2. Select Box tool, height 3
+        3. Drag on the floor…
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Pictus version or commit
+      placeholder: v0.1.0, or the commit hash if running from source
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots, files or console errors
+      description: Attach the .pictus file if it helps. Console errors are under Ctrl+Shift+I in dev builds.
