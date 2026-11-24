@@ -1,7 +1,13 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  let { title, onclose, width = 420, children, footer }: {
+  let {
+    title,
+    onclose,
+    width = 420,
+    children,
+    footer,
+  }: {
     title: string;
     onclose: () => void;
     width?: number;

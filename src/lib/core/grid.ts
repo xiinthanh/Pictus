@@ -67,7 +67,9 @@ export class VoxelGrid {
   /** Copy of this grid resized to new dimensions, keeping voxels that still fit. */
   resized(sx: number, sy: number, sz: number): VoxelGrid {
     const g = new VoxelGrid(sx, sy, sz);
-    const mx = Math.min(sx, this.sx), my = Math.min(sy, this.sy), mz = Math.min(sz, this.sz);
+    const mx = Math.min(sx, this.sx),
+      my = Math.min(sy, this.sy),
+      mz = Math.min(sz, this.sz);
     for (let z = 0; z < mz; z++)
       for (let y = 0; y < my; y++)
         for (let x = 0; x < mx; x++) g.data[g.index(x, y, z)] = this.data[this.index(x, y, z)];

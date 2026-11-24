@@ -1,0 +1,8 @@
+# Generated or owned by other tools
+build/
+.svelte-kit/
+src-tauri/
+static/
+pnpm-lock.yaml
+# Prose is written by hand; formatting it would reflow the docs
+*.md

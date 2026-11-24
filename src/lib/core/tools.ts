@@ -82,8 +82,7 @@ export function boxCells(grid: VoxelGrid, a: Vec3, b: Vec3): Vec3[] {
   const hi = [grid.sx, grid.sy, grid.sz].map((s, k) => Math.min(s - 1, Math.max(a[k], b[k])));
   const out: Vec3[] = [];
   for (let z = lo[2]; z <= hi[2]; z++)
-    for (let y = lo[1]; y <= hi[1]; y++)
-      for (let x = lo[0]; x <= hi[0]; x++) out.push([x, y, z]);
+    for (let y = lo[1]; y <= hi[1]; y++) for (let x = lo[0]; x <= hi[0]; x++) out.push([x, y, z]);
   return out;
 }
 
@@ -92,15 +91,23 @@ export function lineCells(a: Vec3, b: Vec3): Vec3[] {
   const out: Vec3[] = [];
   let [x0, y0] = a;
   const [x1, y1, z] = b;
-  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
-  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  const dx = Math.abs(x1 - x0),
+    dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1,
+    sy = y0 < y1 ? 1 : -1;
   let err = dx + dy;
   for (;;) {
     out.push([x0, y0, z]);
     if (x0 === x1 && y0 === y1) break;
     const e2 = 2 * err;
-    if (e2 >= dy) { err += dy; x0 += sx; }
-    if (e2 <= dx) { err += dx; y0 += sy; }
+    if (e2 >= dy) {
+      err += dy;
+      x0 += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y0 += sy;
+    }
   }
   return out;
 }

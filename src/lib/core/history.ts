@@ -11,7 +11,10 @@ export class History {
   private redoStack: Change[] = [];
   private cells = 0;
 
-  constructor(private maxCells = 16_000_000, private maxSteps = 300) {}
+  constructor(
+    private maxCells = 16_000_000,
+    private maxSteps = 300,
+  ) {}
 
   get canUndo(): boolean {
     return this.undoStack.length > 0;
@@ -27,10 +30,7 @@ export class History {
     this.cells += c.idx.length;
     for (const r of this.redoStack) this.cells -= r.idx.length;
     this.redoStack = [];
-    while (
-      this.undoStack.length > 1 &&
-      (this.cells > this.maxCells || this.undoStack.length > this.maxSteps)
-    ) {
+    while (this.undoStack.length > 1 && (this.cells > this.maxCells || this.undoStack.length > this.maxSteps)) {
       this.cells -= this.undoStack.shift()!.idx.length;
     }
   }

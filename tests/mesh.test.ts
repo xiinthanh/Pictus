@@ -122,7 +122,8 @@ describe('exporters', () => {
     expect(tris).toBe(b.indices.length / 3);
     expect(stl.length).toBe(84 + tris * 50);
     let maxX = 0;
-    for (let t = 0; t < tris; t++) for (let k = 0; k < 3; k++) maxX = Math.max(maxX, view.getFloat32(84 + t * 50 + 12 + k * 12, true));
+    for (let t = 0; t < tris; t++)
+      for (let k = 0; k < 3; k++) maxX = Math.max(maxX, view.getFloat32(84 + t * 50 + 12 + k * 12, true));
     expect(maxX).toBe(4); // 2 voxels × 2 mm
   });
 

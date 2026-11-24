@@ -26,7 +26,9 @@ export function writeObj(
     offset += p.length / 3;
 
     const c = b.color ? palette[b.color] : 0xcccccc;
-    const r = ((c >> 16) & 255) / 255, g = ((c >> 8) & 255) / 255, bl = (c & 255) / 255;
+    const r = ((c >> 16) & 255) / 255,
+      g = ((c >> 8) & 255) / 255,
+      bl = (c & 255) / 255;
     mtl.push(`newmtl ${name}`, `Kd ${num(r)} ${num(g)} ${num(bl)}`, 'Ka 0 0 0', 'Ks 0 0 0', 'd 1', 'illum 1', '');
   }
   return { obj: obj.join('\n') + '\n', mtl: mtl.join('\n') };

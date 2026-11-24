@@ -2,7 +2,12 @@
   import { app, editor, TOOLS } from '$lib/state/app.svelte';
 
   const tool = $derived(TOOLS.find((t) => t.id === app.tool));
-  const mirrors = $derived(['x', 'y', 'z'].filter((a) => app.mirror[a as 'x']).map((a) => a.toUpperCase()).join(''));
+  const mirrors = $derived(
+    ['x', 'y', 'z']
+      .filter((a) => app.mirror[a as 'x'])
+      .map((a) => a.toUpperCase())
+      .join(''),
+  );
   const voxelSize = $derived((app.rev, editor.voxelSize));
 </script>
 

@@ -66,7 +66,10 @@ export class Viewport {
 
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.04, 1.04, 1.04));
     for (let i = 0; i < 8; i++) {
-      const g = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: COLORS.place, depthTest: false, transparent: true }));
+      const g = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: COLORS.place, depthTest: false, transparent: true }),
+      );
       g.renderOrder = 10;
       g.visible = false;
       this.ghosts.push(g);
@@ -80,13 +83,23 @@ export class Viewport {
     this.boxPreview.renderOrder = 9;
     this.slicePlane = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({ color: COLORS.slice, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: COLORS.slice,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
     );
     this.slicePlane.visible = false;
     this.scene.add(this.boxPreview, this.slicePlane);
 
     const el = this.renderer.domElement;
-    const on = <K extends keyof HTMLElementEventMap>(t: EventTarget, type: K, fn: (e: HTMLElementEventMap[K]) => void) => {
+    const on = <K extends keyof HTMLElementEventMap>(
+      t: EventTarget,
+      type: K,
+      fn: (e: HTMLElementEventMap[K]) => void,
+    ) => {
       t.addEventListener(type, fn as EventListener);
       this.disposers.push(() => t.removeEventListener(type, fn as EventListener));
     };
@@ -94,7 +107,9 @@ export class Viewport {
     on(el, 'pointermove', (e) => this.onMove(e));
     on(el, 'pointerup', (e) => this.onUp(e));
     on(el, 'pointercancel', (e) => this.onUp(e));
-    on(el, 'pointerleave', () => { if (!this.drag) this.showTarget(null); });
+    on(el, 'pointerleave', () => {
+      if (!this.drag) this.showTarget(null);
+    });
     on(el, 'contextmenu', (e) => e.preventDefault());
     on(window, 'keydown', (e) => this.onKey(e as KeyboardEvent, true));
     on(window, 'keyup', (e) => this.onKey(e as KeyboardEvent, false));
@@ -160,7 +175,8 @@ export class Viewport {
 
   private markAll() {
     const [nx, ny, nz] = this.chunkCounts();
-    for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) this.dirtyChunks.add(x + 8 * (y + 8 * z));
+    for (let z = 0; z < nz; z++)
+      for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) this.dirtyChunks.add(x + 8 * (y + 8 * z));
   }
 
   /** Marks the chunk containing a cell, plus neighbours whose border faces depend on it. */
@@ -174,8 +190,16 @@ export class Viewport {
     };
     add(c);
     for (let k = 0; k < 3; k++) {
-      if (p[k] % CHUNK === 0) { const n = c.slice(); n[k]--; add(n); }
-      if (p[k] % CHUNK === CHUNK - 1) { const n = c.slice(); n[k]++; add(n); }
+      if (p[k] % CHUNK === 0) {
+        const n = c.slice();
+        n[k]--;
+        add(n);
+      }
+      if (p[k] % CHUNK === CHUNK - 1) {
+        const n = c.slice();
+        n[k]++;
+        add(n);
+      }
     }
   }
 
@@ -183,7 +207,9 @@ export class Viewport {
     const g = editor.grid;
     const maxZ = Math.min(this.maxZ, g.sz - 1);
     for (const key of this.dirtyChunks) {
-      const cx = key % 8, cy = Math.floor(key / 8) % 8, cz = Math.floor(key / 64);
+      const cx = key % 8,
+        cy = Math.floor(key / 8) % 8,
+        cz = Math.floor(key / 64);
       const old = this.chunks.get(key);
       if (old) {
         old.geometry.dispose();
@@ -227,10 +253,18 @@ export class Viewport {
   }
 
   setMirror(m: { x: boolean; y: boolean; z: boolean }) {
-    this.mirrorPlanes.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+    this.mirrorPlanes.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
     this.mirrorPlanes.clear();
     const g = editor.grid;
-    const mat = new THREE.MeshBasicMaterial({ color: 0xb388ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false });
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xb388ff,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
     const add = (w: number, h: number, pos: Vec3, rot: [number, number, number]) => {
       const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
       p.position.set(...pos);
@@ -265,7 +299,13 @@ export class Viewport {
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       this.highlightMesh = new THREE.Mesh(
         geo,
-        new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false }),
+        new THREE.MeshBasicMaterial({
+          color: COLORS.highlight,
+          transparent: true,
+          opacity: 0.45,
+          depthTest: false,
+          depthWrite: false,
+        }),
       );
       this.highlightMesh.renderOrder = 8;
       this.scene.add(this.highlightMesh);
@@ -274,7 +314,9 @@ export class Viewport {
   }
 
   private buildGuides() {
-    this.guides.traverse((o) => { if (o instanceof THREE.LineSegments) o.geometry.dispose(); });
+    this.guides.traverse((o) => {
+      if (o instanceof THREE.LineSegments) o.geometry.dispose();
+    });
     this.guides.clear();
     const g = editor.grid;
     const minor: number[] = [];
@@ -289,8 +331,54 @@ export class Viewport {
     this.guides.add(lines(minor, COLORS.grid), lines(major, COLORS.gridMajor));
     const { sx, sy, sz } = g;
     const b = [
-      0, 0, sz, sx, 0, sz, sx, 0, sz, sx, sy, sz, sx, sy, sz, 0, sy, sz, 0, sy, sz, 0, 0, sz,
-      0, 0, 0, 0, 0, sz, sx, 0, 0, sx, 0, sz, sx, sy, 0, sx, sy, sz, 0, sy, 0, 0, sy, sz,
+      0,
+      0,
+      sz,
+      sx,
+      0,
+      sz,
+      sx,
+      0,
+      sz,
+      sx,
+      sy,
+      sz,
+      sx,
+      sy,
+      sz,
+      0,
+      sy,
+      sz,
+      0,
+      sy,
+      sz,
+      0,
+      0,
+      sz,
+      0,
+      0,
+      0,
+      0,
+      0,
+      sz,
+      sx,
+      0,
+      0,
+      sx,
+      0,
+      sz,
+      sx,
+      sy,
+      0,
+      sx,
+      sy,
+      sz,
+      0,
+      sy,
+      0,
+      0,
+      sy,
+      sz,
     ];
     this.guides.add(lines(b, COLORS.bounds));
     // Axis hints: X red, Y green along the floor edges.
@@ -313,7 +401,8 @@ export class Viewport {
   }
 
   private resize() {
-    const w = this.container.clientWidth, h = this.container.clientHeight;
+    const w = this.container.clientWidth,
+      h = this.container.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = '100%';
@@ -435,7 +524,8 @@ export class Viewport {
   private onUp(e: PointerEvent) {
     const drag = this.drag;
     this.drag = null;
-    if (this.renderer.domElement.hasPointerCapture(e.pointerId)) this.renderer.domElement.releasePointerCapture(e.pointerId);
+    if (this.renderer.domElement.hasPointerCapture(e.pointerId))
+      this.renderer.domElement.releasePointerCapture(e.pointerId);
     if (!drag) return;
     if (drag.kind === 'stroke') editor.endStroke();
     if (drag.kind === 'box') {
@@ -450,12 +540,13 @@ export class Viewport {
     if (d?.kind !== 'box') return;
     const cells = boxRegion(d.start, d.end, d.axis, d.sign, app.boxHeight);
     if (!cells.length) return;
-    const lo = cells[0], hi = cells[cells.length - 1];
+    const lo = cells[0],
+      hi = cells[cells.length - 1];
     const size = [0, 1, 2].map((k) => hi[k] - lo[k] + 1);
     this.boxPreview.scale.set(size[0] + 0.04, size[1] + 0.04, size[2] + 0.04);
     this.boxPreview.position.set(lo[0] + size[0] / 2, lo[1] + size[1] / 2, lo[2] + size[2] / 2);
     const mat = this.boxPreview.material as THREE.MeshBasicMaterial;
-    mat.color.setHex(d.mode === 'erase' ? COLORS.erase : editor.palette[app.color] ?? COLORS.place);
+    mat.color.setHex(d.mode === 'erase' ? COLORS.erase : (editor.palette[app.color] ?? COLORS.place));
     this.boxPreview.visible = true;
     this.showTarget(null);
     this.requestRender();
@@ -465,8 +556,12 @@ export class Viewport {
     app.hover = cell;
     const cells = cell ? mirrorCells(editor.grid, [cell], app.mirror) : [];
     const tool = app.tool;
-    const color = tool === 'erase' || (tool === 'box' && app.boxMode === 'erase') ? COLORS.erase
-      : tool === 'place' || tool === 'box' ? COLORS.place : COLORS.other;
+    const color =
+      tool === 'erase' || (tool === 'box' && app.boxMode === 'erase')
+        ? COLORS.erase
+        : tool === 'place' || tool === 'box'
+          ? COLORS.place
+          : COLORS.other;
     this.ghosts.forEach((g, i) => {
       const c = cells[i];
       g.visible = !!c;

@@ -33,7 +33,11 @@ export interface HttpOut {
 }
 
 type Id = string | number | null;
-interface RpcError { code: number; message: string; data?: unknown }
+interface RpcError {
+  code: number;
+  message: string;
+  data?: unknown;
+}
 
 const accepted: HttpOut = { status: 202, body: '' };
 
@@ -131,7 +135,8 @@ export async function handleHttp(req: HttpIn, tools: Tool[], ctx: ToolCtx): Prom
 }
 
 function headerMismatch(req: HttpIn, version: string, method: string, params: Record<string, unknown>): string | null {
-  if (req.protocolVersion !== version) return `MCP-Protocol-Version header '${req.protocolVersion ?? ''}' does not match body '${version}'`;
+  if (req.protocolVersion !== version)
+    return `MCP-Protocol-Version header '${req.protocolVersion ?? ''}' does not match body '${version}'`;
   if (req.method !== method) return `Mcp-Method header '${req.method ?? ''}' does not match body '${method}'`;
   if (method === 'tools/call') {
     const name = decodeHeader(req.name);

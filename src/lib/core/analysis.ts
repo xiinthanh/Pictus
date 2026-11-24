@@ -49,8 +49,7 @@ export function findThinContacts(grid: VoxelGrid): Vec3[] {
   const out: Vec3[] = [];
   for (let z = 0; z <= grid.sz; z++)
     for (let y = 0; y <= grid.sy; y++)
-      for (let x = 0; x <= grid.sx; x++)
-        if (NON_MANIFOLD[vertexMask(x, y, z, solid)]) out.push([x, y, z]);
+      for (let x = 0; x <= grid.sx; x++) if (NON_MANIFOLD[vertexMask(x, y, z, solid)]) out.push([x, y, z]);
   return out;
 }
 
@@ -88,21 +87,29 @@ export function fixThinContacts(grid: VoxelGrid, maxPasses = 30): FixResult {
       let bestScore = Infinity;
       for (let b = 0; b < 8; b++) {
         if ((mask >> b) & 1) continue;
-        const cx = vx - 1 + (b & 1), cy = vy - 1 + ((b >> 1) & 1), cz = vz - 1 + ((b >> 2) & 1);
+        const cx = vx - 1 + (b & 1),
+          cy = vy - 1 + ((b >> 1) & 1),
+          cz = vz - 1 + ((b >> 2) & 1);
         if (!g.inBounds(cx, cy, cz)) continue;
         const m2 = mask | (1 << b);
         let solidNeighbours = 0;
         for (const bit of [1, 2, 4]) if ((mask >> (b ^ bit)) & 1) solidNeighbours++;
         // Prefer fills that resolve the contact, then fewer components, then lower cells (better support).
-        const score = NON_MANIFOLD[m2] * 100 + SOLID_COMPONENTS[m2] * 10 + EMPTY_COMPONENTS[m2] * 10
-          - solidNeighbours * 3 + ((b >> 2) & 1);
+        const score =
+          NON_MANIFOLD[m2] * 100 +
+          SOLID_COMPONENTS[m2] * 10 +
+          EMPTY_COMPONENTS[m2] * 10 -
+          solidNeighbours * 3 +
+          ((b >> 2) & 1);
         if (score < bestScore) {
           bestScore = score;
           best = b;
         }
       }
       if (best < 0) continue;
-      const cx = vx - 1 + (best & 1), cy = vy - 1 + ((best >> 1) & 1), cz = vz - 1 + ((best >> 2) & 1);
+      const cx = vx - 1 + (best & 1),
+        cy = vy - 1 + ((best >> 1) & 1),
+        cz = vz - 1 + ((best >> 2) & 1);
       const color = neighbourColor(g, cx, cy, cz);
       const i = g.index(cx, cy, cz);
       g.data[i] = color;
@@ -124,8 +131,13 @@ function neighbourColor(g: VoxelGrid, x: number, y: number, z: number): number {
         const w = Math.abs(dx) + Math.abs(dy) + Math.abs(dz) === 1 ? 3 : 1;
         votes.set(v, (votes.get(v) ?? 0) + w);
       }
-  let best = 1, bestVotes = -1;
-  for (const [v, n] of votes) if (n > bestVotes) { best = v; bestVotes = n; }
+  let best = 1,
+    bestVotes = -1;
+  for (const [v, n] of votes)
+    if (n > bestVotes) {
+      best = v;
+      bestVotes = n;
+    }
   return best;
 }
 

@@ -4,9 +4,7 @@
 import type { Editor } from '../core/editor';
 import type { Vec3 } from '../core/grid';
 
-export type Content =
-  | { type: 'text'; text: string }
-  | { type: 'image'; data: string; mimeType: string };
+export type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
 
 export interface ToolCtx {
   editor: Editor;

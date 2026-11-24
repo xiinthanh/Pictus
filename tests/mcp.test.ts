@@ -4,7 +4,10 @@ import { handleHttp, decodeHeader, LEGACY_VERSIONS, type HttpIn } from '../src/l
 import type { Tool, ToolCtx } from '../src/lib/mcp/tools';
 
 const V = '2026-07-28';
-const META = { 'io.modelcontextprotocol/protocolVersion': V, 'io.modelcontextprotocol/clientInfo': { name: 't', version: '1' } };
+const META = {
+  'io.modelcontextprotocol/protocolVersion': V,
+  'io.modelcontextprotocol/clientInfo': { name: 't', version: '1' },
+};
 
 function makeCtx(editor = new Editor()): ToolCtx & { notified: string[] } {
   const notified: string[] = [];
@@ -34,7 +37,12 @@ const echo: Tool = {
 function modern(method: string, params: Record<string, unknown> = {}, id: number | null = 1): HttpIn {
   const msg: Record<string, unknown> = { jsonrpc: '2.0', method, params: { ...params, _meta: META } };
   if (id !== null) msg.id = id;
-  return { body: JSON.stringify(msg), protocolVersion: V, method, name: typeof params.name === 'string' ? params.name : null };
+  return {
+    body: JSON.stringify(msg),
+    protocolVersion: V,
+    method,
+    name: typeof params.name === 'string' ? params.name : null,
+  };
 }
 
 function legacy(method: string, params: Record<string, unknown> = {}, id: number | null = 1): HttpIn {
@@ -63,7 +71,11 @@ describe('MCP protocol (modern)', () => {
     const ctx = makeCtx();
     const r = await call(modern('tools/call', { name: 'echo', arguments: { text: 'hi' } }), ctx);
     expect(r.status).toBe(200);
-    expect(r.msg.result).toMatchObject({ resultType: 'complete', isError: false, content: [{ type: 'text', text: 'hi' }] });
+    expect(r.msg.result).toMatchObject({
+      resultType: 'complete',
+      isError: false,
+      content: [{ type: 'text', text: 'hi' }],
+    });
     expect(ctx.notified).toEqual(['echo']);
   });
 
@@ -100,7 +112,13 @@ describe('MCP protocol (modern)', () => {
 
 describe('MCP protocol (legacy)', () => {
   it('negotiates initialize', async () => {
-    const r = await call(legacy('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'c', version: '1' } }));
+    const r = await call(
+      legacy('initialize', {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'c', version: '1' },
+      }),
+    );
     expect(r.msg.result.protocolVersion).toBe('2025-06-18');
     expect(r.msg.result.serverInfo.name).toBe('pictus');
     const newer = await call(legacy('initialize', { protocolVersion: '2099-01-01' }));

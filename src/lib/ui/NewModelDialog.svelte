@@ -4,7 +4,9 @@
   import { app, editor } from '$lib/state/app.svelte';
   import Modal from './Modal.svelte';
 
-  let sx = $state(32), sy = $state(32), sz = $state(32);
+  let sx = $state(32),
+    sy = $state(32),
+    sz = $state(32);
   const presets = [16, 32, 64, 128];
   const valid = $derived([sx, sy, sz].every((v) => Number.isInteger(v) && v >= 1 && v <= MAX_DIM));
   const mm = $derived((v: number) => Math.round(v * editor.voxelSize * 10) / 10);
@@ -21,7 +23,16 @@
     <h3>Grid size (voxels)</h3>
     <div class="row presets">
       {#each presets as p (p)}
-        <button class:active={sx === p && sy === p && sz === p} onclick={() => { sx = p; sy = p; sz = p; }}>{p}³</button>
+        <button
+          class:active={sx === p && sy === p && sz === p}
+          onclick={() => {
+            sx = p;
+            sy = p;
+            sz = p;
+          }}
+        >
+          {p}³
+        </button>
       {/each}
     </div>
   </div>

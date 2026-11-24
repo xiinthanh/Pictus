@@ -4,7 +4,16 @@ import { decodePictus, encodePictus } from '$lib/core/io/pictus';
 import { readVox, writeVox } from '$lib/core/io/vox';
 import { defaultPalette } from '$lib/core/palette';
 import {
-  baseName, errorText, pickOpen, pickSave, PICTUS_FILTER, readBytes, stripExt, VOX_FILTER, withExt, writeBytes,
+  baseName,
+  errorText,
+  pickOpen,
+  pickSave,
+  PICTUS_FILTER,
+  readBytes,
+  stripExt,
+  VOX_FILTER,
+  withExt,
+  writeBytes,
 } from '$lib/platform/files';
 import { app, editor } from '$lib/state/app.svelte';
 
@@ -29,7 +38,11 @@ function loadModel(model: Model, path: string | null, name: string) {
 }
 
 export function newModel(sx: number, sy: number, sz: number) {
-  loadModel({ grid: new VoxelGrid(sx, sy, sz), palette: defaultPalette(), voxelSize: editor.voxelSize }, null, 'Untitled');
+  loadModel(
+    { grid: new VoxelGrid(sx, sy, sz), palette: defaultPalette(), voxelSize: editor.voxelSize },
+    null,
+    'Untitled',
+  );
   app.color = 1;
   app.layer = 0;
 }
@@ -49,7 +62,10 @@ export async function openFile(path?: string, confirmed = false): Promise<void> 
     if (p.toLowerCase().endsWith('.vox')) {
       const { model, warnings } = readVox(bytes);
       loadImported(model, stripExt(baseName(p)));
-      app.flash(warnings.length ? warnings.join(' ') : 'Imported MagicaVoxel model — use Save to keep it as .pictus', 7000);
+      app.flash(
+        warnings.length ? warnings.join(' ') : 'Imported MagicaVoxel model — use Save to keep it as .pictus',
+        7000,
+      );
     } else {
       loadModel(decodePictus(bytes), p, stripExt(baseName(p)));
       app.addRecent(p);

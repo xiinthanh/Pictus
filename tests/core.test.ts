@@ -36,7 +36,10 @@ describe('Editor history', () => {
     const e = new Editor({ grid: new VoxelGrid(4, 4, 4), palette: [0, 0xff0000], voxelSize: 1 });
     e.beginStroke();
     e.apply([[0, 1]]);
-    e.apply([[1, 1], [0, 1]]);
+    e.apply([
+      [1, 1],
+      [0, 1],
+    ]);
     e.endStroke();
     e.fill([2, 3], 1);
     expect(e.grid.count()).toBe(4);
@@ -65,7 +68,10 @@ describe('tools', () => {
   const g = new VoxelGrid(5, 4, 3);
 
   it('mirrors across enabled axes without duplicates', () => {
-    expect(mirrorCells(g, [[0, 0, 0]], { x: true, y: false, z: false })).toEqual([[0, 0, 0], [4, 0, 0]]);
+    expect(mirrorCells(g, [[0, 0, 0]], { x: true, y: false, z: false })).toEqual([
+      [0, 0, 0],
+      [4, 0, 0],
+    ]);
     expect(mirrorCells(g, [[0, 0, 0]], { x: true, y: true, z: true })).toHaveLength(8);
     // Center column maps onto itself.
     expect(mirrorCells(g, [[2, 0, 0]], { x: true, y: false, z: false })).toEqual([[2, 0, 0]]);
@@ -88,7 +94,12 @@ describe('tools', () => {
   it('builds boxes and lines', () => {
     expect(boxCells(g, [3, 2, 1], [1, 1, 1])).toHaveLength(6);
     expect(boxCells(g, [-5, 0, 0], [0, 0, 0])).toHaveLength(1);
-    expect(lineCells([0, 0, 2], [3, 1, 2])).toEqual([[0, 0, 2], [1, 0, 2], [2, 1, 2], [3, 1, 2]]);
+    expect(lineCells([0, 0, 2], [3, 1, 2])).toEqual([
+      [0, 0, 2],
+      [1, 0, 2],
+      [2, 1, 2],
+      [3, 1, 2],
+    ]);
   });
 });
 

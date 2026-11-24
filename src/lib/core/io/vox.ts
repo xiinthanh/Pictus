@@ -28,11 +28,15 @@ export function readVox(bytes: Uint8Array): VoxImport {
     const cid = id(o);
     const content = view.getUint32(o + 4, true);
     const body = o + 12;
-    if (cid === 'MAIN') { o = body + content; continue; }
+    if (cid === 'MAIN') {
+      o = body + content;
+      continue;
+    }
     if (body + content > bytes.length) throw new Error('The .vox file is truncated');
     if (cid === 'SIZE') {
       models++;
-      if (models === 1) size = [view.getUint32(body, true), view.getUint32(body + 4, true), view.getUint32(body + 8, true)];
+      if (models === 1)
+        size = [view.getUint32(body, true), view.getUint32(body + 4, true), view.getUint32(body + 8, true)];
     } else if (cid === 'XYZI' && !xyzi) {
       xyzi = { o: body + 4, n: view.getUint32(body, true) };
     } else if (cid === 'RGBA') {
@@ -63,7 +67,10 @@ export function readVox(bytes: Uint8Array): VoxImport {
   if (xyzi.o + xyzi.n * 4 > bytes.length) throw new Error('The .vox file is truncated');
   for (let k = 0; k < xyzi.n; k++) {
     const p = xyzi.o + k * 4;
-    const x = bytes[p], y = bytes[p + 1], z = bytes[p + 2], c = bytes[p + 3];
+    const x = bytes[p],
+      y = bytes[p + 1],
+      z = bytes[p + 2],
+      c = bytes[p + 3];
     if (c === 0 || !grid.inBounds(x, y, z)) continue;
     let mapped = remap.get(c);
     if (mapped === undefined) {
@@ -87,23 +94,47 @@ export function writeVox(m: Model): Uint8Array {
   const out = new Uint8Array(8 + 12 + children);
   const view = new DataView(out.buffer);
   let o = 0;
-  const tag = (s: string) => { for (let i = 0; i < 4; i++) out[o++] = s.charCodeAt(i); };
-  const u32 = (v: number) => { view.setUint32(o, v, true); o += 4; };
-  tag('VOX '); u32(150);
-  tag('MAIN'); u32(0); u32(children);
-  tag('SIZE'); u32(12); u32(0); u32(grid.sx); u32(grid.sy); u32(grid.sz);
-  tag('XYZI'); u32(4 + count * 4); u32(0); u32(count);
+  const tag = (s: string) => {
+    for (let i = 0; i < 4; i++) out[o++] = s.charCodeAt(i);
+  };
+  const u32 = (v: number) => {
+    view.setUint32(o, v, true);
+    o += 4;
+  };
+  tag('VOX ');
+  u32(150);
+  tag('MAIN');
+  u32(0);
+  u32(children);
+  tag('SIZE');
+  u32(12);
+  u32(0);
+  u32(grid.sx);
+  u32(grid.sy);
+  u32(grid.sz);
+  tag('XYZI');
+  u32(4 + count * 4);
+  u32(0);
+  u32(count);
   for (let z = 0; z < grid.sz; z++)
     for (let y = 0; y < grid.sy; y++)
       for (let x = 0; x < grid.sx; x++) {
         const v = grid.data[grid.index(x, y, z)];
         if (!v) continue;
-        out[o++] = x; out[o++] = y; out[o++] = z; out[o++] = v;
+        out[o++] = x;
+        out[o++] = y;
+        out[o++] = z;
+        out[o++] = v;
       }
-  tag('RGBA'); u32(256 * 4); u32(0);
+  tag('RGBA');
+  u32(256 * 4);
+  u32(0);
   for (let i = 1; i <= 256; i++) {
     const c = i < palette.length ? palette[i] : 0;
-    out[o++] = (c >> 16) & 255; out[o++] = (c >> 8) & 255; out[o++] = c & 255; out[o++] = 255;
+    out[o++] = (c >> 16) & 255;
+    out[o++] = (c >> 8) & 255;
+    out[o++] = c & 255;
+    out[o++] = 255;
   }
   return out;
 }

@@ -7,8 +7,14 @@
 
 <nav>
   {#each TOOLS as t (t.id)}
-    <button class="tool" class:active={app.tool === t.id} onclick={() => (app.tool = t.id)}
-      title="{t.label} ({t.key}) — {t.hint}" aria-label={t.label} aria-pressed={app.tool === t.id}>
+    <button
+      class="tool"
+      class:active={app.tool === t.id}
+      onclick={() => (app.tool = t.id)}
+      title="{t.label} ({t.key}) — {t.hint}"
+      aria-label={t.label}
+      aria-pressed={app.tool === t.id}
+    >
       <Icon name={t.id} size={20} />
       <span>{t.label}</span>
     </button>
@@ -19,7 +25,9 @@
       <h3>Box</h3>
       <div class="seg">
         {#each [['add', 'Add'], ['erase', 'Erase'], ['paint', 'Paint']] as [id, label] (id)}
-          <button class:active={app.boxMode === id} onclick={() => (app.boxMode = id as typeof app.boxMode)}>{label}</button>
+          <button class:active={app.boxMode === id} onclick={() => (app.boxMode = id as typeof app.boxMode)}>
+            {label}
+          </button>
         {/each}
       </div>
       <label class="row" title="How many layers deep the box goes">
@@ -32,24 +40,46 @@
     <h3>Mirror</h3>
     <div class="seg">
       {#each ['x', 'y', 'z'] as const as axis (axis)}
-        <button class:active={app.mirror[axis]} aria-pressed={app.mirror[axis]}
+        <button
+          class:active={app.mirror[axis]}
+          aria-pressed={app.mirror[axis]}
           title="Mirror edits across the {axis.toUpperCase()} center"
-          onclick={() => (app.mirror = { ...app.mirror, [axis]: !app.mirror[axis] })}>{axis.toUpperCase()}</button>
+          onclick={() => (app.mirror = { ...app.mirror, [axis]: !app.mirror[axis] })}
+        >
+          {axis.toUpperCase()}
+        </button>
       {/each}
     </div>
   </div>
 
   <div class="group">
     <h3>Layer view</h3>
-    <button class="wide" class:active={app.layerMode} aria-pressed={app.layerMode} onclick={() => (app.layerMode = !app.layerMode)}
-      title="Edit one layer at a time like 2D pixel art (L)">
+    <button
+      class="wide"
+      class:active={app.layerMode}
+      aria-pressed={app.layerMode}
+      onclick={() => (app.layerMode = !app.layerMode)}
+      title="Edit one layer at a time like 2D pixel art (L)"
+    >
       <span class="row"><Icon name="layers" size={16} /> {app.layerMode ? 'On' : 'Off'}</span>
     </button>
     {#if app.layerMode}
       <div class="row layer">
-        <button onclick={() => (app.layer = Math.max(0, app.layer - 1))} title="Layer down (PgDn)" aria-label="Layer down">−</button>
+        <button
+          onclick={() => (app.layer = Math.max(0, app.layer - 1))}
+          title="Layer down (PgDn)"
+          aria-label="Layer down"
+        >
+          −
+        </button>
         <span class="num">{app.layer + 1}<span class="muted">/{maxLayer + 1}</span></span>
-        <button onclick={() => (app.layer = Math.min(maxLayer, app.layer + 1))} title="Layer up (PgUp)" aria-label="Layer up">+</button>
+        <button
+          onclick={() => (app.layer = Math.min(maxLayer, app.layer + 1))}
+          title="Layer up (PgUp)"
+          aria-label="Layer up"
+        >
+          +
+        </button>
       </div>
     {/if}
   </div>

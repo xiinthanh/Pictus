@@ -87,7 +87,10 @@ async function answer(ev: McpEvent): Promise<void> {
   try {
     res = await handleHttp(ev, TOOLS, ctx);
   } catch (e) {
-    res = { status: 500, body: JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message: errorText(e) } }) };
+    res = {
+      status: 500,
+      body: JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message: errorText(e) } }),
+    };
   }
   await invoke('mcp_respond', { id: ev.id, status: res.status, body: res.body }).catch(() => {});
 }

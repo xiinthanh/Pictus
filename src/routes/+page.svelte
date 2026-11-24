@@ -23,7 +23,9 @@
 
   $effect(() => {
     document.title = title;
-    getCurrentWindow().setTitle(title).catch(() => {});
+    getCurrentWindow()
+      .setTitle(title)
+      .catch(() => {});
   });
 
   onMount(() => {

@@ -7,7 +7,12 @@ export type BoxMode = 'add' | 'erase' | 'paint';
 export type DialogId = 'new' | 'export' | 'image' | 'ai' | null;
 
 export const TOOLS: { id: ToolId; label: string; key: string; hint: string }[] = [
-  { id: 'place', label: 'Place', key: '1', hint: 'Click a face to add a voxel. Drag to keep placing on the same layer.' },
+  {
+    id: 'place',
+    label: 'Place',
+    key: '1',
+    hint: 'Click a face to add a voxel. Drag to keep placing on the same layer.',
+  },
   { id: 'erase', label: 'Erase', key: '2', hint: 'Click or drag over voxels to remove them.' },
   { id: 'paint', label: 'Paint', key: '3', hint: 'Click or drag over voxels to recolor them.' },
   { id: 'pick', label: 'Pick color', key: '4', hint: 'Click a voxel to use its color.' },

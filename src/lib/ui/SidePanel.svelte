@@ -35,7 +35,11 @@
     <h3>Color</h3>
     <div class="current row">
       <label class="picker" style:background={toCss(current)} title="Click to change this color">
-        <input type="color" value={toCss(current)} oninput={(e) => editor.setColor(app.color, fromCss(e.currentTarget.value))} />
+        <input
+          type="color"
+          value={toCss(current)}
+          oninput={(e) => editor.setColor(app.color, fromCss(e.currentTarget.value))}
+        />
       </label>
       <div>
         <div class="hex">{toCss(current).toUpperCase()}</div>
@@ -45,28 +49,48 @@
     <div class="swatches">
       {#each palette as c, i (i)}
         {#if i > 0}
-          <button class="swatch" class:active={i === app.color} style:background={toCss(c)}
-            style:color={luminance(c) > 0.6 ? '#000' : '#fff'} onclick={() => (app.color = i)}
-            title="{toCss(c).toUpperCase()} · {usage[i]} voxels" aria-label="Color {i}">
+          <button
+            class="swatch"
+            class:active={i === app.color}
+            style:background={toCss(c)}
+            style:color={luminance(c) > 0.6 ? '#000' : '#fff'}
+            onclick={() => (app.color = i)}
+            title="{toCss(c).toUpperCase()} · {usage[i]} voxels"
+            aria-label="Color {i}"
+          >
             {#if i === app.color}●{/if}
           </button>
         {/if}
       {/each}
-      <button class="swatch add" onclick={addColor} title="Add a color" aria-label="Add a color"><Icon name="plus" size={14} /></button>
+      <button class="swatch add" onclick={addColor} title="Add a color" aria-label="Add a color">
+        <Icon name="plus" size={14} />
+      </button>
     </div>
   </section>
 
   <section>
     <h3>Model</h3>
     <dl>
-      <dt>Grid</dt><dd>{info.sx} × {info.sy} × {info.sz}</dd>
-      <dt>Voxels</dt><dd>{info.count.toLocaleString()}</dd>
+      <dt>Grid</dt>
+      <dd>{info.sx} × {info.sy} × {info.sz}</dd>
+      <dt>Voxels</dt>
+      <dd>{info.count.toLocaleString()}</dd>
       <dt>Voxel size</dt>
       <dd>
-        <input type="number" min="0.1" max="20" step="0.1" value={info.size}
-          onchange={(e) => { const v = parseFloat(e.currentTarget.value); if (v > 0) editor.setVoxelSize(v); }} /> mm
+        <input
+          type="number"
+          min="0.1"
+          max="20"
+          step="0.1"
+          value={info.size}
+          onchange={(e) => {
+            const v = parseFloat(e.currentTarget.value);
+            if (v > 0) editor.setVoxelSize(v);
+          }}
+        /> mm
       </dd>
-      <dt>Print size</dt><dd>{mm(info.sx * info.size)} × {mm(info.sy * info.size)} × {mm(info.sz * info.size)} mm</dd>
+      <dt>Print size</dt>
+      <dd>{mm(info.sx * info.size)} × {mm(info.sy * info.size)} × {mm(info.sz * info.size)} mm</dd>
     </dl>
   </section>
 

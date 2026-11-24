@@ -20,19 +20,26 @@ export function encodePictus(m: Model): Uint8Array {
   const view = new DataView(out.buffer);
   for (let i = 0; i < 4; i++) out[i] = MAGIC.charCodeAt(i);
   let o = 4;
-  view.setUint16(o, VERSION, true); o += 2;
-  view.setUint16(o, m.grid.sx, true); o += 2;
-  view.setUint16(o, m.grid.sy, true); o += 2;
-  view.setUint16(o, m.grid.sz, true); o += 2;
-  view.setFloat32(o, m.voxelSize, true); o += 4;
-  view.setUint16(o, colors, true); o += 2;
+  view.setUint16(o, VERSION, true);
+  o += 2;
+  view.setUint16(o, m.grid.sx, true);
+  o += 2;
+  view.setUint16(o, m.grid.sy, true);
+  o += 2;
+  view.setUint16(o, m.grid.sz, true);
+  o += 2;
+  view.setFloat32(o, m.voxelSize, true);
+  o += 4;
+  view.setUint16(o, colors, true);
+  o += 2;
   for (let i = 1; i <= colors; i++) {
     const c = m.palette[i];
     out[o++] = (c >> 16) & 255;
     out[o++] = (c >> 8) & 255;
     out[o++] = c & 255;
   }
-  view.setUint32(o, voxels.length, true); o += 4;
+  view.setUint32(o, voxels.length, true);
+  o += 4;
   out.set(voxels, o);
   return out;
 }
@@ -45,18 +52,25 @@ export function decodePictus(bytes: Uint8Array): Model {
   for (let i = 0; i < 4; i++) if (bytes[i] !== MAGIC.charCodeAt(i)) fail('wrong header');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let o = 4;
-  const version = view.getUint16(o, true); o += 2;
+  const version = view.getUint16(o, true);
+  o += 2;
   if (version > VERSION) fail(`made by a newer Pictus, format v${version}`);
-  const sx = view.getUint16(o, true); o += 2;
-  const sy = view.getUint16(o, true); o += 2;
-  const sz = view.getUint16(o, true); o += 2;
-  const voxelSize = view.getFloat32(o, true); o += 4;
-  const colors = view.getUint16(o, true); o += 2;
+  const sx = view.getUint16(o, true);
+  o += 2;
+  const sy = view.getUint16(o, true);
+  o += 2;
+  const sz = view.getUint16(o, true);
+  o += 2;
+  const voxelSize = view.getFloat32(o, true);
+  o += 4;
+  const colors = view.getUint16(o, true);
+  o += 2;
   if (colors > MAX_COLORS) fail('too many colors');
   if (o + colors * 3 + 4 > bytes.length) fail('truncated');
   const palette = [0];
   for (let i = 0; i < colors; i++, o += 3) palette.push((bytes[o] << 16) | (bytes[o + 1] << 8) | bytes[o + 2]);
-  const len = view.getUint32(o, true); o += 4;
+  const len = view.getUint32(o, true);
+  o += 4;
   if (o + len > bytes.length) fail('truncated');
   let data: Uint8Array;
   try {

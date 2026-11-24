@@ -118,8 +118,12 @@
 
     {#if report.parts.length > 1 || report.contacts.length}
       <div class="issues">
-        {#if report.parts.length > 1}<p>⚠ {report.parts.length} separate parts — smaller ones may fall over or get lost.</p>{/if}
-        {#if report.contacts.length}<p>⚠ {report.contacts.length} spots where voxels touch only at an edge or corner — these print weak.</p>{/if}
+        {#if report.parts.length > 1}<p>
+            ⚠ {report.parts.length} separate parts — smaller ones may fall over or get lost.
+          </p>{/if}
+        {#if report.contacts.length}<p>
+            ⚠ {report.contacts.length} spots where voxels touch only at an edge or corner — these print weak.
+          </p>{/if}
         <button onclick={openCheck}>Review in print check</button>
       </div>
     {:else}

@@ -53,21 +53,33 @@
       for (let y = 0; y < g.sy; y++)
         for (let x = 0; x < g.sx; x++) {
           const v = g.data[g.index(x, y, layer - 1)];
-          if (v) { ctx.fillStyle = pal[v]; ctx.fillRect(px(x), py(y), cs, cs); }
+          if (v) {
+            ctx.fillStyle = pal[v];
+            ctx.fillRect(px(x), py(y), cs, cs);
+          }
         }
       ctx.globalAlpha = 1;
     }
     for (let y = 0; y < g.sy; y++)
       for (let x = 0; x < g.sx; x++) {
         const v = g.data[g.index(x, y, layer)];
-        if (v) { ctx.fillStyle = pal[v]; ctx.fillRect(px(x), py(y), cs, cs); }
+        if (v) {
+          ctx.fillStyle = pal[v];
+          ctx.fillRect(px(x), py(y), cs, cs);
+        }
       }
     if (cs >= 6) {
       ctx.strokeStyle = 'rgba(255,255,255,0.06)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let x = 0; x <= g.sx; x++) { ctx.moveTo(px(x) + 0.5, oy); ctx.lineTo(px(x) + 0.5, oy + cs * g.sy); }
-      for (let y = 0; y <= g.sy; y++) { ctx.moveTo(ox, oy + y * cs + 0.5); ctx.lineTo(ox + cs * g.sx, oy + y * cs + 0.5); }
+      for (let x = 0; x <= g.sx; x++) {
+        ctx.moveTo(px(x) + 0.5, oy);
+        ctx.lineTo(px(x) + 0.5, oy + cs * g.sy);
+      }
+      for (let y = 0; y <= g.sy; y++) {
+        ctx.moveTo(ox, oy + y * cs + 0.5);
+        ctx.lineTo(ox + cs * g.sx, oy + y * cs + 0.5);
+      }
       ctx.stroke();
     }
     ctx.strokeStyle = 'rgba(255,255,255,0.18)';
@@ -76,14 +88,21 @@
     ctx.strokeStyle = 'rgba(179,136,255,0.7)';
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    if (app.mirror.x) { ctx.moveTo(ox + (cs * g.sx) / 2, oy); ctx.lineTo(ox + (cs * g.sx) / 2, oy + cs * g.sy); }
-    if (app.mirror.y) { ctx.moveTo(ox, oy + (cs * g.sy) / 2); ctx.lineTo(ox + cs * g.sx, oy + (cs * g.sy) / 2); }
+    if (app.mirror.x) {
+      ctx.moveTo(ox + (cs * g.sx) / 2, oy);
+      ctx.lineTo(ox + (cs * g.sx) / 2, oy + cs * g.sy);
+    }
+    if (app.mirror.y) {
+      ctx.moveTo(ox, oy + (cs * g.sy) / 2);
+      ctx.lineTo(ox + cs * g.sx, oy + (cs * g.sy) / 2);
+    }
     ctx.stroke();
     ctx.setLineDash([]);
 
     if (box) {
       const cells = boxRegion(box.start, box.end, 2, 1, 1);
-      const lo = cells[0], hi = cells[cells.length - 1];
+      const lo = cells[0],
+        hi = cells[cells.length - 1];
       ctx.fillStyle = app.boxMode === 'erase' ? 'rgba(255,90,90,0.35)' : toCss(editor.palette[app.color]) + '88';
       ctx.fillRect(px(lo[0]), py(hi[1]), (hi[0] - lo[0] + 1) * cs, (hi[1] - lo[1] + 1) * cs);
     } else if (hover) {
@@ -94,7 +113,15 @@
   }
 
   $effect(() => {
-    void app.rev; void layer; void hover; void box; void size; void app.mirror; void app.color; void app.tool; void app.boxMode;
+    void app.rev;
+    void layer;
+    void hover;
+    void box;
+    void size;
+    void app.mirror;
+    void app.color;
+    void app.tool;
+    void app.boxMode;
     draw();
   });
 
@@ -139,7 +166,10 @@
 
   function onUp(e: PointerEvent) {
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-    if (drag) { editor.endStroke(); drag = null; }
+    if (drag) {
+      editor.endStroke();
+      drag = null;
+    }
     if (box) {
       editCells(boxRegion(box.start, box.end, 2, 1, 1), app.boxMode);
       box = null;
@@ -148,9 +178,19 @@
 </script>
 
 <div class="slice" bind:this={wrap}>
-  <canvas bind:this={canvas} style:width="{size.w}px" style:height="{size.h}px"
-    onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp}
-    onpointerleave={() => { hover = null; }} oncontextmenu={(e) => e.preventDefault()}></canvas>
+  <canvas
+    bind:this={canvas}
+    style:width="{size.w}px"
+    style:height="{size.h}px"
+    onpointerdown={onDown}
+    onpointermove={onMove}
+    onpointerup={onUp}
+    onpointercancel={onUp}
+    onpointerleave={() => {
+      hover = null;
+    }}
+    oncontextmenu={(e) => e.preventDefault()}
+  ></canvas>
   <div class="label">Layer {layer + 1} <span class="muted">· right-drag erases · faded = layer below</span></div>
 </div>
 

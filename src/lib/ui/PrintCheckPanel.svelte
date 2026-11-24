@@ -35,7 +35,10 @@
     for (const v of report.contacts)
       for (const c of cellsAtVertex(editor.grid, v)) {
         const key = c.join(',');
-        if (!seen.has(key)) { seen.add(key); out.push(c); }
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push(c);
+        }
       }
     return out;
   }
@@ -97,7 +100,13 @@
               <span>{k === 0 ? 'Main body' : `Part ${k + 1}`}</span>
               <span class="muted">{p.size} voxels</span>
               <span class="spacer"></span>
-              <button class="small-btn" class:active={shown === `p${k}`} onclick={() => toggle(`p${k}`, () => partCells(k))}>Show</button>
+              <button
+                class="small-btn"
+                class:active={shown === `p${k}`}
+                onclick={() => toggle(`p${k}`, () => partCells(k))}
+              >
+                Show
+              </button>
               {#if k > 0}<button class="small-btn" onclick={() => removePart(k)}>Delete</button>{/if}
             </li>
           {/each}
@@ -112,7 +121,9 @@
         <p class="ok">✓ No edge or corner-only contacts</p>
       {:else}
         <p class="warn">⚠ {report.contacts.length} thin contacts</p>
-        <p class="muted small">Voxels touching only at an edge or corner make weak, zero-width joints that slicers flag as errors.</p>
+        <p class="muted small">
+          Voxels touching only at an edge or corner make weak, zero-width joints that slicers flag as errors.
+        </p>
         <div class="row">
           <button class:active={shown === 'c'} onclick={() => toggle('c', contactCells)}>Show</button>
           <button class="primary" onclick={fixContacts}>Fix all</button>
