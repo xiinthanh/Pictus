@@ -78,7 +78,7 @@ Mỗi task PHẢI đi đúng thứ tự, không bỏ bước:
 
 ## 6. Bảo mật
 
-6.1. CẤM hardcode secret, token, mật khẩu, API key — kể cả giá trị "test".
+6.1. CẤM hardcode secret, token, mật khẩu, API key thật — kể cả giá trị "test" trông giống thật hoặc dùng được ở đâu đó. Được phép: chuỗi giữ chỗ cố định, rõ ràng không phải bí mật, chỉ dùng trong test (vd `"a".repeat(MIN_TOKEN_LEN)`) — để không mâu thuẫn với 5.5.
 6.2. CẤM in secret hoặc dữ liệu cá nhân ra log.
 6.3. Mọi input từ bên ngoài PHẢI được validate. Query DB PHẢI dùng tham số hoá, CẤM nối chuỗi.
 6.4. CẤM tắt kiểm tra bảo mật (SSL verify, CORS `*`, CSRF, auth) để "cho chạy được".
@@ -121,17 +121,17 @@ DỪNG và chờ người dùng xác nhận khi:
 > Điền cho đúng dự án. Agent PHẢI dùng đúng các lệnh này, không tự chế lệnh khác.
 
 ```
-install:    <vd: npm ci>
-build:      <vd: npm run build>
-lint:       <vd: npm run lint>
-format:     <vd: npm run format:check>
-typecheck:  <vd: npm run typecheck>
-test:       <vd: npm test>
+install:    pnpm install
+build:      pnpm build                (frontend)  ·  cd src-tauri && cargo build   (Rust)
+lint:       pnpm lint
+format:     pnpm format:check         (sửa tự động: pnpm format)
+typecheck:  pnpm check
+test:       pnpm test                 ·  cd src-tauri && cargo test
 ```
 
-Stack: `<ngôn ngữ, framework, phiên bản>`
-Thư mục chính: `<vd: src/ = code, tests/ = test, docs/ = tài liệu>`
-Vùng CẤM chạm: `<vd: vendor/, generated/, migrations/>`
+Stack: `TypeScript 6.0 + Svelte 5 + SvelteKit 2 (SPA) + Vite 8, Three.js 0.187; Rust + Tauri 2`
+Thư mục chính: `src/lib/core/ = lõi thuần TS · src/lib/ = app · src-tauri/ = Rust · tests/ = test · hai_doc/ = tài liệu`
+Vùng CẤM chạm: `node_modules/, src-tauri/target/, src-tauri/gen/, .svelte-kit/, build/`
 
 ---
 
