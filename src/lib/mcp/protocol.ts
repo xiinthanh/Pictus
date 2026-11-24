@@ -19,6 +19,14 @@ export const INSTRUCTIONS = [
 ].join('\n');
 
 /**
+ * How long a client may reuse `server/discover` and `tools/list` results. The
+ * modern spec requires these hints; the tool list only changes with an app
+ * update and is the same for every client, hence "public".
+ */
+export const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_HINTS = { ttlMs: CACHE_TTL_MS, cacheScope: 'public' } as const;
+
+/**
  * A request this close to the relay's deadline is refused instead of run: the
  * relay answers 504 at the deadline, and a tool that still ran would apply an
  * edit the client believes failed (and may retry).
@@ -124,11 +132,12 @@ async function modern(req: HttpIn, rpc: Rpc, version: string, tools: Tool[], ctx
         capabilities: { tools: {} },
         _meta: { 'io.modelcontextprotocol/serverInfo': SERVER_INFO },
         instructions: INSTRUCTIONS,
+        ...CACHE_HINTS,
       });
     case 'ping':
       return complete({});
     case 'tools/list':
-      return complete({ tools: tools.map(definition) });
+      return complete({ tools: tools.map(definition), ...CACHE_HINTS });
     case 'tools/call': {
       const r = await callTool(params, tools, ctx);
       return 'error' in r ? fail(200, id, r.error.code, r.error.message) : complete(r.result);

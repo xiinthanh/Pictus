@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { Editor } from '../src/lib/core/editor';
 import { VoxelGrid } from '../src/lib/core/grid';
 import { defaultPalette } from '../src/lib/core/palette';
-import { handleHttp, decodeHeader, LEGACY_VERSIONS, START_MARGIN_MS, type HttpIn } from '../src/lib/mcp/protocol';
+import {
+  CACHE_TTL_MS,
+  handleHttp,
+  decodeHeader,
+  LEGACY_VERSIONS,
+  START_MARGIN_MS,
+  type HttpIn,
+} from '../src/lib/mcp/protocol';
 import { TOOLS, type AppInfo, type Tool, type ToolCtx } from '../src/lib/mcp/tools';
 
 const V = '2026-07-28';
@@ -64,6 +71,11 @@ describe('MCP protocol (modern)', () => {
     expect(msg.result.supportedVersions).toEqual([V]);
     expect(msg.result.capabilities.tools).toEqual({});
     expect(msg.result._meta['io.modelcontextprotocol/serverInfo'].name).toBe('pictus');
+  });
+
+  it.each(['server/discover', 'tools/list'])('gives %s the caching hints the spec requires', async (method) => {
+    const { msg } = await call(modern(method));
+    expect(msg.result).toMatchObject({ ttlMs: CACHE_TTL_MS, cacheScope: 'public' });
   });
 
   it('lists the tools', async () => {
