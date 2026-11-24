@@ -1,6 +1,6 @@
 # Pictus — Implementation Status
 
-_Last updated: 2026-11-23_
+_Last updated: 2026-11-24_
 
 This records where the implementation stands against [PLAN.md](PLAN.md): what is built, what has been verified, what hasn't, and what comes next.
 
@@ -10,35 +10,32 @@ This records where the implementation stands against [PLAN.md](PLAN.md): what is
 | --- | --- |
 | Code for milestones M1–M7 | Written |
 | Core unit tests | 38/38 pass (`pnpm test`) |
+| Rust unit test | 1/1 passes (`cargo test`) |
 | Type-check (`pnpm check`) | 0 errors, 0 warnings |
 | Frontend build (`pnpm build`) | Succeeds |
-| Rust shell compile | **Blocked**: MSVC linker missing (see [Blocker](#blocker)) |
-| App run in Tauri (`pnpm tauri dev`) | **Not yet run** |
+| App run in Tauri (`pnpm tauri dev`) | Runs; live UI tests pass after one fix (see [Live UI testing](#live-ui-testing)) |
 | Installer (`pnpm tauri build`) | **Not yet run** |
-| Git | Repo initialised, **nothing committed** |
+| Slicer check of exports | **Not yet done** |
+| Git | 7 feature commits, plus the viewport fix and this doc update |
 
-## Blocker
+## Build environment
 
-Rust cannot link. Visual Studio Build Tools 2022 is installed, but without the **"Desktop development with C++"** workload (`Microsoft.VisualStudio.Workload.VCTools`); VS Community 2022 doesn't have it either. With no MSVC `link.exe`, the build picks up Cygwin's `C:\cygwin64\bin\link.exe` and fails with `link: extra operand ...`.
-
-Fix (admin PowerShell, about 2 GB):
+Rust needs the MSVC linker from the Visual Studio Build Tools **"Desktop development with C++"** workload (`Microsoft.VisualStudio.Workload.VCTools`). It was missing at first: the build then picked up Cygwin's `C:\cygwin64\bin\link.exe` and failed with `link: extra operand ...`. The workload is now installed and the build works. To set up another machine:
 
 ```powershell
 & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive
 ```
-
-Then open a new terminal and run `pnpm tauri dev`. Once MSVC is installed, rustc finds its `link.exe` directly, so Cygwin's copy on PATH won't get in the way.
 
 ## Milestone status
 
 | Milestone | Status | Notes |
 | --- | --- | --- |
 | M1 Scaffold | Done | Tauri 2 + SvelteKit (SPA mode via adapter-static) + TS + Vite. Deps: `three`, `fflate`, `@tauri-apps/plugin-dialog`; dev: `vitest`, `@types/three`. |
-| M2 Core model and viewport | Code done | 16³ chunked meshing, grid DDA raycast, render on demand. |
-| M3 Editing tools | Code done | Place/erase/paint/pick/fill/box, X/Y/Z mirror, undo/redo, palette. |
-| M4 Layer view | Code done | 2D layer editor beside the 3D view; layers above the current one are hidden in 3D. |
-| M5 Files | Code done | `.pictus`, `.vox` import/export, PNG import, recent files, unsaved-changes prompt, "open with". |
-| M6 Export and printability | Code done, core tested | STL/OBJ/3MF, multi-color, print check with fixes. |
+| M2 Core model and viewport | Done, tested live | 16³ chunked meshing, grid DDA raycast, render on demand. |
+| M3 Editing tools | Done, tested live | Place/erase/paint/pick/fill/box, X/Y/Z mirror, undo/redo, palette. Click/drag bugs fixed in `19f5338`. |
+| M4 Layer view | Done, tested live | 2D layer editor beside the 3D view; layers above the current one are hidden in 3D. |
+| M5 Files | Done, tested live | `.pictus`, `.vox` import/export, PNG import, recent files, unsaved-changes prompt. "Open with" not tested yet (needs the installer). |
+| M6 Export and printability | Done, tested live | STL/OBJ/3MF, multi-color, print check with fixes. Not yet opened in a slicer. |
 | M7 Polish and installer | Code done | Dark UI, app icon, NSIS + MSI targets, `.pictus` file association. Installer not built yet. |
 
 ## Architecture
@@ -109,14 +106,46 @@ Then open a new terminal and run `pnpm tauri dev`. Once MSVC is installed, rustc
   | Per-color export meshes | ~2.9 s | |
   | Print analysis | ~240 ms | |
 
+### Live UI testing
+
+The running dev app (`pnpm tauri dev`) was driven with real mouse and keyboard input through Playwright, connected to WebView2's DevTools port:
+
+```powershell
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'; pnpm tauri dev
+```
+
+Clicks were aimed at known cells by reading the hovered cell from the status bar. Native file dialogs were answered at the IPC layer: Playwright intercepted the `ipc.localhost/plugin:dialog|open` and `|save` requests and answered with test paths. Everything after the dialog ran for real: encoding, the Rust file writes, decoding. The test scripts were throwaway and are not in the repo.
+
+**Bugs found and fixed** in `src/lib/render/viewport.ts` (commit `19f5338`):
+
+1. **Place added two voxels per click.** `onDown` re-ran `onMove`, whose plane through cell *centers* landed on a different cell than the clicked face.
+2. **Erase removed two voxels per click** and dug deeper while dragging, because the follow-up raycast hit the voxel behind.
+3. **The box rectangle was shifted and too small,** for the same plane reason.
+
+Drags now intersect the plane of the clicked face, erase and paint drags stay on the starting layer, and `onDown` no longer re-applies the tool.
+
+**Passing after the fix (no console errors):**
+
+| Area | Checks |
+| --- | --- |
+| 3D tools | Place, stack on a voxel, drag-place a row, undo/redo of a drag as one step, erase, mirror X places a pair, paint then pick reads the color back, box (height 1 and 3), fill recolors a connected slab |
+| 2D layer editor | Click places, drag draws a continuous line, right-click erases, PgUp changes layer |
+| Print check | Lists loose parts; "Keep only the main body" leaves one part |
+| Image import | 12×10 PNG with outline plate and keyring → 14×16×3, 3 colors, 267 voxels; title updates |
+| Save / New / Open | `.pictus` written; reopened model identical; no prompt right after saving; recent list updated |
+| Unsaved changes | Prompt on New; prompt on window close (real `WM_CLOSE`, like the title-bar X); Cancel keeps the app open |
+| Export | 3MF with 3 color parts; single STL; 3 per-color STLs; OBJ+MTL; status bar message |
+| `.vox` | Export, then re-import, inside the app gives an identical model |
+| Rust IPC | `write_file`/`read_file` round-trip of 70 KB of binary data to a path with a non-ASCII character |
+
 ### Not done yet
 
-- Running the app: 3D view, tools, 2D layer editor, dialogs, saving, the close prompt, "open with".
+- The native file dialogs themselves (intercepted in the tests above).
+- "Open with" / double-clicking a `.pictus` file (needs the installer).
 - `pnpm tauri build`: install, double-click a `.pictus` file, uninstall.
 - Opening exports in PrusaSlicer, Bambu Studio or Orca (repair warnings, parts per color, dimensions).
 - `.vox` round-trip through MagicaVoxel itself.
 - Frame rate on a laptop's integrated GPU with a full 128³ model.
-- The Rust unit test (`cargo test`), blocked by the linker.
 
 ## Known limitations and follow-ups
 
@@ -128,12 +157,14 @@ Then open a new terminal and run `pnpm tauri dev`. Once MSVC is installed, rustc
 - **No single-instance handling.** Double-clicking a `.pictus` file while Pictus is open starts a second window.
 - **CSP is `null`.** The app loads only local content, but a strict CSP could be added later.
 - **STL** has no vertex identity, so slicers merge coincident vertices at edge/corner contacts. Use the print check fix, or export 3MF.
+- **The default image-import plate color (#212121)** is barely visible against the dark viewport background, which makes the keyring loop hard to see. A lighter default would help.
+- **Clicking a face whose neighbouring cell is outside the grid** (e.g. the front face of a voxel on the grid edge) does nothing, and no hover ghost appears. That's correct, but there's no feedback telling you why.
+- **Toolbar settings** (box height, mirror, tool) carry over when you create or open a model. That's intended, but easy to miss.
 
 ## Next steps
 
-1. Install the MSVC C++ workload (see [Blocker](#blocker)).
-2. Make a first git commit of the current state.
-3. Run `pnpm tauri dev` and work through the manual checks in [PLAN.md](PLAN.md#tests-and-verification). Fix whatever turns up.
-4. Run `pnpm tauri build` and test the installer and file association.
-5. Check exports in a slicer.
-6. Take on the follow-ups above as needed.
+1. Run `pnpm tauri build` and test the installer, the `.pictus` file association and uninstalling.
+2. Check exports in a slicer (PrusaSlicer / Bambu Studio / Orca).
+3. Check frame rate with a full 128³ model on the laptop.
+4. Consider adding the live UI test as a repeatable script (Playwright over the WebView2 debug port).
+5. Take on the follow-ups above as needed.
