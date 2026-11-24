@@ -166,23 +166,25 @@ const undo: Tool = {
   name: 'undo',
   title: 'Undo AI edit',
   description:
-    "Reverts the AI's most recent edit. Only works while that edit is still the latest step: it never " +
-    "reverts the user's own edits.",
+    "Reverts the latest step in Pictus if the AI made it. It never reverts the user's own edits: when the " +
+    'latest step is theirs, it refuses.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   run: (_args, ctx) => {
     refuseWhileDrawing(ctx);
     const { editor, aiSteps } = ctx;
-    const last = aiSteps[aiSteps.length - 1];
-    if (!last) throw new Error('There is no AI edit left to undo.');
-    if (editor.history.lastUndo !== last) {
+    if (aiSteps.length === 0) throw new Error('There is no AI edit left to undo.');
+    const top = editor.history.lastUndo;
+    // Any AI step may be on top: the user can Ctrl+Z the AI's latest edits, exposing an earlier one.
+    const at = top ? aiSteps.lastIndexOf(top) : -1;
+    if (!top || at < 0) {
       throw new Error(
-        'The latest step in Pictus is not an AI edit (the user edited or undid since), so nothing was undone. ' +
+        "The latest step in Pictus is the user's own edit (or there is none), so nothing was undone. " +
           'Ask the user to press Ctrl+Z if they want it reverted.',
       );
     }
     editor.undo();
-    aiSteps.pop();
-    return [text(`Undid the last AI edit (${last.idx.length} cells).`)];
+    aiSteps.splice(at, 1);
+    return [text(`Undid the last AI edit (${top.idx.length} cells).`)];
   },
 };
 

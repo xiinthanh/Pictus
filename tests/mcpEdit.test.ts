@@ -213,11 +213,20 @@ describe('undo', () => {
     expect(filled(ctx)).toBe(0);
   });
 
+  it('can still undo an earlier AI edit after the user undid the latest one', async () => {
+    const ctx = makeCtx();
+    await run('set_voxels', { voxels: [[0, 0, 0, 1]] }, ctx);
+    await run('set_voxels', { voxels: [[1, 0, 0, 1]] }, ctx);
+    ctx.editor.undo();
+    await run('undo', {}, ctx);
+    expect(filled(ctx)).toBe(0);
+  });
+
   it("leaves the user's newer edit alone", async () => {
     const ctx = makeCtx();
     await run('set_voxels', { voxels: [[0, 0, 0, 1]] }, ctx);
     ctx.editor.apply([[ctx.editor.grid.index(3, 2, 1), 7]]);
-    await expect(run('undo', {}, ctx)).rejects.toThrow(/not an AI edit/);
+    await expect(run('undo', {}, ctx)).rejects.toThrow(/the user's own edit/);
     expect([at(ctx, 0, 0, 0), at(ctx, 3, 2, 1)]).toEqual([1, 7]);
   });
 
