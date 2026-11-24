@@ -1,0 +1,5 @@
+# Owners are requested for review automatically on pull requests touching these paths.
+# Later rules override earlier ones. Add teammates to areas they own, e.g.:
+#   /src/lib/ui/   @xiinthanh @teammate
+
+*   @xiinthanh
