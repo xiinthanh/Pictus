@@ -26,6 +26,10 @@ function makeCtx(editor = new Editor(), info = INFO): ToolCtx & { notified: stri
     editor,
     notified,
     info: () => info,
+    newModel: () => {
+      throw new Error('newModel is not used by these tests');
+    },
+    aiSteps: [],
     notify: (t) => notified.push(t),
   };
 }
@@ -253,8 +257,16 @@ async function runText(name: string, args: Record<string, unknown>, ctx: ToolCtx
 }
 
 describe('MCP tools (registry)', () => {
-  it('registers get_model and get_layer', () => {
-    expect(TOOLS.map((t) => t.name)).toEqual(['get_model', 'get_layer']);
+  it('registers the read and edit tools in a fixed order', () => {
+    expect(TOOLS.map((t) => t.name)).toEqual([
+      'get_model',
+      'get_layer',
+      'set_voxels',
+      'fill_box',
+      'new_model',
+      'set_color',
+      'undo',
+    ]);
   });
 });
 

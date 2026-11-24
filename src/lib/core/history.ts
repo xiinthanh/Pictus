@@ -24,6 +24,11 @@ export class History {
     return this.redoStack.length > 0;
   }
 
+  /** The step `undo()` would revert next, or null. Lets callers tell whose edit it is. */
+  get lastUndo(): Change | null {
+    return this.undoStack[this.undoStack.length - 1] ?? null;
+  }
+
   push(c: Change): void {
     if (c.idx.length === 0) return;
     this.undoStack.push(c);

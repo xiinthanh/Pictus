@@ -2,6 +2,7 @@
 // answers them through protocol.ts.
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { newModel } from '$lib/actions';
 import { errorText } from '$lib/platform/files';
 import { app, editor } from '$lib/state/app.svelte';
 import { handleHttp, type HttpIn } from './protocol';
@@ -23,6 +24,8 @@ const ctx: ToolCtx = {
     layer: app.layer,
     color: app.color,
   }),
+  newModel,
+  aiSteps: [],
   notify: (tool) => app.flash(`AI: ${tool}`),
 };
 

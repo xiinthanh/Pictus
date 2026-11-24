@@ -2,7 +2,10 @@
 // app state: everything app-specific comes in through `ToolCtx`, so this file
 // runs under vitest without Svelte.
 import type { Editor } from '../core/editor';
+import type { Change } from '../core/history';
 import { toCss } from '../core/palette';
+import { intArg, text } from './args';
+import { EDIT_TOOLS } from './editTools';
 
 export type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
 
@@ -18,6 +21,10 @@ export interface AppInfo {
 export interface ToolCtx {
   editor: Editor;
   info(): AppInfo;
+  /** Replaces the open model with an empty one, like File > New. */
+  newModel(sx: number, sy: number, sz: number): void;
+  /** Undo steps the AI made, oldest first, so its `undo` never reverts the user's own edits. */
+  aiSteps: Change[];
   /** Tells the user which tool the AI just used. */
   notify(tool: string): void;
 }
@@ -32,19 +39,6 @@ export interface Tool {
 
 /** Hex digits per cell in `get_layer` rows: color indexes go up to 255. */
 const CELL_HEX_WIDTH = 2;
-
-function text(value: string): Content {
-  return { type: 'text', text: value };
-}
-
-/** A whole number from `min` to `max`, or an error the AI can act on. */
-function intArg(args: Record<string, unknown>, key: string, min: number, max: number): number {
-  const v = args[key];
-  if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
-    throw new Error(`'${key}' must be a whole number from ${min} to ${max} (got ${JSON.stringify(v) ?? 'nothing'}).`);
-  }
-  return v;
-}
 
 const getModel: Tool = {
   name: 'get_model',
@@ -98,4 +92,4 @@ const getLayer: Tool = {
   },
 };
 
-export const TOOLS: Tool[] = [getModel, getLayer];
+export const TOOLS: Tool[] = [getModel, getLayer, ...EDIT_TOOLS];
