@@ -53,12 +53,12 @@ Rust needs the MSVC linker from the Visual Studio Build Tools **"Desktop develop
 | `src/lib/core/analysis.ts` | Loose parts (6-connected), thin contacts (edge/corner only), auto-fix. |
 | `src/lib/core/io/` | `pictus.ts`, `vox.ts`, `image.ts` (quantize, outline plate, keyring loop). |
 | `src/lib/core/export/` | `stl.ts` (binary), `obj.ts` (+MTL), `threemf.ts` (zip via fflate). |
-| `src/lib/render/viewport.ts` | Three.js scene, OrbitControls, chunk meshes, ghosts, box preview, slice/mirror planes, highlight. |
+| `src/lib/render/viewport.ts` | Three.js scene, OrbitControls, chunk meshes, ghosts, box preview, slice/mirror planes, highlight, animated view snaps (`viewFrom`). |
 | `src/lib/editing.ts` | Edit helpers shared by the 3D and 2D views. |
 | `src/lib/actions.ts` | New/open/save/save as/import/export `.vox`, unsaved-changes prompt. |
 | `src/lib/state/app.svelte.ts` | Svelte 5 rune state (`app`) and the single `editor`. |
 | `src/lib/platform/files.ts` | Wrappers over the dialog plugin and the Rust file commands. |
-| `src/lib/ui/` | MenuBar, Toolbar, SidePanel, StatusBar, ViewportView, SliceView, the dialogs, PrintCheckPanel. |
+| `src/lib/ui/` | MenuBar, Toolbar, SidePanel, StatusBar, ViewportView, CubeView, SliceView, the dialogs, PrintCheckPanel. |
 | `src/routes/+page.svelte` | Layout, keyboard shortcuts, window title, close prompt, startup file. |
 | `src-tauri/src/lib.rs` | `read_file`, `write_file` (raw binary body, hex-encoded path header), `startup_file`. |
 | `tests/` | `core`, `mesh`, `io` and `perf` specs, plus helpers (watertight check, volume). |
@@ -69,6 +69,7 @@ Rust needs the MSVC linker from the Visual Studio Build Tools **"Desktop develop
 - **Edge- and corner-only contacts in the mesh.** Vertices are split per "sheet". At a 4-face edge, faces are paired by solid cell, unless the two solids are connected around both ends of the edge; then they are paired by empty cell. The rule depends only on the edge, so both endpoints agree. Every edge ends up shared by exactly 2 triangles.
 - **Multi-color.** One closed body per color (faces between two colors appear in both bodies). In 3MF the bodies are components of one object, so slicers load them as parts of a single model.
 - **Viewport.** Rendering happens only on change. Edits rebuild only the affected 16³ chunks (plus neighbours on chunk borders). Flat per-face shading is baked into vertex colors with `MeshBasicMaterial`, so no lights are needed.
+- **View cube.** `CubeView.svelte` sits in the viewport's top-right corner and is drawn as SVG, not in WebGL. `Viewport.onCamera` passes it the camera rotation, and it projects the cube with a fixed orthographic projection, showing at most three faces. Each label is mapped onto its face with an SVG `matrix()` transform. Each face is split 3×3, giving 26 click targets (faces, edges, corners). A click calls `Viewport.viewFrom(dir)`, which swings the camera around the target over about 250 ms. Top and bottom views lean slightly toward −Y so the Z-up camera keeps a steady up direction. Clicking or scrolling the canvas, pressing F, or starting another snap cancels a running one. Because the cube is a separate DOM element, its clicks never reach the canvas's editing input. Face names follow the Z-up axes: Front = −Y, Right = +X, Top = +Z. The default framing (F) looks from front-right-top.
 
 ### `.pictus` format (v1, little endian)
 
@@ -138,6 +139,14 @@ Drags now intersect the plane of the clicked face, erase and paint drags stay on
 | `.vox` | Export, then re-import, inside the app gives an identical model |
 | Rust IPC | `write_file`/`read_file` round-trip of 70 KB of binary data to a path with a non-ASCII character |
 
+**View cube (added later, browser only).** Tested on the Vite dev server in headless Chrome through Playwright. `window.__TAURI_INTERNALS__` was stubbed, because outside Tauri `getCurrentWindow()` throws inside an `$effect` and stops Svelte's other effects from running. These checks pass with no console errors:
+
+- The default framing shows Front, Right and Top.
+- The cube turns with a right-drag orbit, and its labels are not mirrored.
+- Top gives a straight-down view.
+- The Front-Right-Top corner gives an isometric view.
+- F returns the camera to the default view.
+
 ### Installer
 
 `pnpm tauri build` (2026-11-24, includes the viewport fix) produced:
@@ -153,6 +162,7 @@ Both installers are well under the ~10 MB target. The installer was run on the d
 ### Not done yet
 
 - The native file dialogs themselves (intercepted in the tests above).
+- The view cube inside the Tauri app (`pnpm tauri dev`); so far it has only been tested in a browser.
 - Uninstalling through Settings → Apps.
 - Opening exports in PrusaSlicer, Bambu Studio or Orca (repair warnings, parts per color, dimensions).
 - `.vox` round-trip through MagicaVoxel itself.
