@@ -4,7 +4,7 @@ import { analyze, cellsAtVertex, type Part, type PrintReport } from '../core/ana
 import type { Vec3, VoxelGrid } from '../core/grid';
 import type { SnapshotView } from '../render/viewport';
 import { boolArg, choiceArg, text } from './args';
-import type { Tool, ToolCtx } from './tools';
+import type { Content, Tool, ToolCtx } from './tools';
 
 /** Enough for the AI to act on; a model with more problems needs fixing in passes anyway. */
 const MAX_LISTED = 50;
@@ -67,15 +67,19 @@ const printCheck: Tool = {
   },
 };
 
-function captureSnapshot(ctx: ToolCtx, view: SnapshotView) {
+function captureSnapshot(ctx: ToolCtx, view: SnapshotView): Content[] {
   const png = ctx.snapshot(view, SNAPSHOT_MAX_PX);
   if (!png) {
     throw new Error(
-      'Could not capture the 3D view: the Pictus window may be minimized or hidden. ' +
-        'Ask the user to bring it back on screen, then retry.',
+      'Could not capture the 3D view: it is not visible right now (hidden, or not laid out yet). ' +
+        'Ask the user to show the Pictus window, then retry.',
     );
   }
-  return { type: 'image' as const, data: png, mimeType: 'image/png' };
+  const image: Content = { type: 'image', data: png, mimeType: 'image/png' };
+  const info = ctx.info();
+  // Layer view hides the upper layers in every picture, which would otherwise look like missing voxels.
+  if (!info.isLayerMode) return [image];
+  return [image, text(`Layer view is on in Pictus: voxels above z=${info.layer} are hidden in this picture.`)];
 }
 
 const snapshot: Tool = {
@@ -83,14 +87,15 @@ const snapshot: Tool = {
   title: 'Snapshot',
   description:
     `Returns a PNG of the 3D view (longest side up to ${SNAPSHOT_MAX_PX} px) so you can check your work. ` +
-    '"overview" (default) shows the whole model from a 3/4 angle without moving the user\'s camera; ' +
-    '"current" shows exactly what the user sees.',
+    '"overview" (default) shows the model from a 3/4 angle without moving the user\'s camera or drawing the ' +
+    'editing cursors; "current" shows exactly what the user sees. In layer view the upper layers are hidden ' +
+    'in both, and the reply says so.',
   inputSchema: {
     type: 'object',
     properties: { view: { type: 'string', enum: [...SNAPSHOT_VIEWS] } },
     additionalProperties: false,
   },
-  run: (args, ctx) => [captureSnapshot(ctx, choiceArg(args, 'view', SNAPSHOT_VIEWS, 'overview'))],
+  run: (args, ctx) => captureSnapshot(ctx, choiceArg(args, 'view', SNAPSHOT_VIEWS, 'overview')),
 };
 
 export const INSPECT_TOOLS: Tool[] = [printCheck, snapshot];

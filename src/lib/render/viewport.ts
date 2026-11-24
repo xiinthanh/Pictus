@@ -412,16 +412,22 @@ export class Viewport {
 
   /**
    * PNG of the 3D view as base64 (no `data:` prefix), longest side at most
-   * `maxPx`. 'overview' uses a temporary framed camera, so the user's view is
-   * untouched. Null when the canvas has no size (window minimized or hidden).
+   * `maxPx`. 'overview' uses a temporary framed camera and hides the editing
+   * overlays, leaving the user's view untouched. Null while the view has no
+   * on-screen size (hidden, or not laid out yet); a minimized window still renders.
    */
   snapshot(view: SnapshotView, maxPx: number): string | null {
+    // The canvas keeps its last size when hidden, so the container is what tells.
+    if (!this.container.clientWidth || !this.container.clientHeight) return null;
     const src = this.renderer.domElement;
-    if (!src.width || !src.height) return null;
     if (this.dirtyChunks.size) this.flushChunks();
-    const camera = view === 'overview' ? this.overviewCamera() : this.camera;
+    const isOverview = view === 'overview';
+    const camera = isOverview ? this.overviewCamera() : this.camera;
+    const overlays = isOverview ? this.visibleOverlays() : [];
+    for (const o of overlays) o.visible = false;
     // Copy right after rendering: without preserveDrawingBuffer the buffer is cleared once shown.
     this.renderer.render(this.scene, camera);
+    for (const o of overlays) o.visible = true;
     const scale = Math.min(1, maxPx / Math.max(src.width, src.height));
     const out = document.createElement('canvas');
     out.width = Math.round(src.width * scale);
@@ -432,6 +438,11 @@ export class Viewport {
     // Put the user's own view back before the browser shows this frame.
     if (camera !== this.camera) this.renderer.render(this.scene, this.camera);
     return out.toDataURL('image/png').slice(PNG_DATA_URL_PREFIX.length);
+  }
+
+  /** Cursor ghosts, the box preview and the layer slice plane that are currently shown. */
+  private visibleOverlays(): THREE.Object3D[] {
+    return [...this.ghosts, this.boxPreview, this.slicePlane].filter((o) => o.visible);
   }
 
   private overviewCamera(): THREE.PerspectiveCamera {

@@ -12,15 +12,26 @@ interface TestCtx extends ToolCtx {
   snapshots: [SnapshotView, number][];
 }
 
-/** Grid with the given cells set to color 1; `png` is what the 3D view "captures". */
-function makeCtx(cells: Vec3[], size: Vec3 = [6, 6, 3], png: string | null = 'iVBOR', isBusy = false): TestCtx {
+interface CtxOptions {
+  size?: Vec3;
+  /** What the 3D view "captures"; null means it can't be captured. */
+  png?: string | null;
+  isBusy?: boolean;
+  /** The layer shown in layer view, or null when layer view is off. */
+  layerView?: number | null;
+}
+
+/** Grid with the given cells set to color 1. */
+function makeCtx(cells: Vec3[], options: CtxOptions = {}): TestCtx {
+  const { size = [6, 6, 3], png = 'iVBOR', isBusy = false, layerView = null } = options;
   const grid = new VoxelGrid(...size);
   for (const [x, y, z] of cells) grid.set(x, y, z, 1);
   const highlighted: Vec3[][] = [];
   const snapshots: [SnapshotView, number][] = [];
+  const isLayerMode = layerView !== null;
   return {
     editor: new Editor({ grid, palette: defaultPalette(), voxelSize: 1 }),
-    info: () => ({ name: 'Untitled', isDirty: false, isBusy, isLayerMode: false, layer: 0, color: 1 }),
+    info: () => ({ name: 'Untitled', isDirty: false, isBusy, isLayerMode, layer: layerView ?? 0, color: 1 }),
     newModel: () => {
       throw new Error('newModel is not used by these tests');
     },
@@ -82,7 +93,7 @@ describe('print_check', () => {
   it('lists at most 50 parts but counts them all', async () => {
     const dots: Vec3[] = [];
     for (let x = 0; x < 20; x += 2) for (let y = 0; y < 20; y += 2) dots.push([x, y, 0]);
-    const r = await runJson('print_check', {}, makeCtx(dots, [20, 20, 1]));
+    const r = await runJson('print_check', {}, makeCtx(dots, { size: [20, 20, 1] }));
     expect([r.partCount, r.parts.length]).toEqual([100, 50]);
   });
 
@@ -137,7 +148,7 @@ describe('fix_thin_contacts', () => {
   });
 
   it('refuses while Pictus is busy and changes nothing', async () => {
-    const ctx = makeCtx(DIAGONAL, [6, 6, 3], 'iVBOR', true);
+    const ctx = makeCtx(DIAGONAL, { isBusy: true });
     await expect(run('fix_thin_contacts', {}, ctx)).rejects.toThrow(/Pictus is busy/);
     expect(ctx.editor.grid.count()).toBe(DIAGONAL.length);
   });
@@ -167,7 +178,7 @@ describe('snapshot', () => {
   });
 
   it('explains when the view cannot be captured', async () => {
-    await expect(run('snapshot', {}, makeCtx(CUBE, [6, 6, 3], null))).rejects.toThrow(/minimized or hidden/);
+    await expect(run('snapshot', {}, makeCtx(CUBE, { png: null }))).rejects.toThrow(/not visible right now/);
   });
 });
 
@@ -192,5 +203,16 @@ describe('highlight after AI edits', () => {
     await run('print_check', {}, ctx);
     await run('undo', {}, ctx);
     expect(ctx.highlighted.at(-1)).toEqual([]);
+  });
+});
+
+describe('snapshot in layer view', () => {
+  it('notes that layers above the open one are hidden', async () => {
+    const out = await run('snapshot', {}, makeCtx(CUBE, { layerView: 1 }));
+    expect(out[1]).toEqual({ type: 'text', text: expect.stringContaining('voxels above z=1 are hidden') });
+  });
+
+  it('adds no note when layer view is off', async () => {
+    expect(await run('snapshot', {}, makeCtx(CUBE))).toHaveLength(1);
   });
 });
