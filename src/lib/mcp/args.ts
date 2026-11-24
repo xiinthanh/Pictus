@@ -42,6 +42,30 @@ export function colorValue(v: unknown, label: string, paletteLength: number): nu
   return intValue(v, label, 0, paletteLength - 1);
 }
 
+/** An optional true/false argument; `fallback` when omitted. */
+export function boolArg(args: Record<string, unknown>, key: string, fallback: boolean): boolean {
+  const v = args[key];
+  if (v === undefined) return fallback;
+  if (typeof v !== 'boolean') throw new Error(`'${key}' must be true or false (got ${shown(v)}).`);
+  return v;
+}
+
+/** An optional argument that must be one of `options`; `fallback` when omitted. */
+export function choiceArg<T extends string>(
+  args: Record<string, unknown>,
+  key: string,
+  options: readonly T[],
+  fallback: T,
+): T {
+  const v = args[key];
+  if (v === undefined) return fallback;
+  const match = options.find((o) => o === v);
+  if (match === undefined) {
+    throw new Error(`'${key}' must be one of ${options.map((o) => `"${o}"`).join(', ')} (got ${shown(v)}).`);
+  }
+  return match;
+}
+
 /** "#rrggbb" (the # is optional) as 0xRRGGBB. */
 export function hexArg(args: Record<string, unknown>, key: string): number {
   const v = args[key];

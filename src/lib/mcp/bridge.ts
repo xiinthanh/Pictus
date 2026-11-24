@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { newModel } from '$lib/actions';
 import { errorText } from '$lib/platform/files';
+import type { Viewport } from '$lib/render/viewport';
 import { app, editor } from '$lib/state/app.svelte';
 import { handleHttp, type HttpIn } from './protocol';
 import { TOOLS, type ToolCtx } from './tools';
@@ -27,8 +28,15 @@ const ctx: ToolCtx = {
   }),
   newModel,
   aiSteps: [],
+  highlight: (cells) => (app.highlight = cells),
+  snapshot: () => null,
   notify: (tool) => app.flash(`AI: ${tool}`),
 };
+
+/** Lets `snapshot` read the 3D view while it exists; pass null when it is torn down. */
+export function registerViewport(view: Viewport | null): void {
+  ctx.snapshot = view ? (which, maxPx) => view.snapshot(which, maxPx) : () => null;
+}
 
 let unlisteners: UnlistenFn[] = [];
 /** Answers strictly one at a time, in arrival order. */

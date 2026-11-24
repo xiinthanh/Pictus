@@ -8,6 +8,10 @@ import { mirrorCells } from '$lib/core/tools';
 import { boxRegion, editCells, fillAt, pickAt } from '$lib/editing';
 import { app, editor, type BoxMode } from '$lib/state/app.svelte';
 
+/** 'current': what the user sees. 'overview': the whole model from a 3/4 angle. */
+export type SnapshotView = 'current' | 'overview';
+const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
+
 type Drag =
   | { kind: 'stroke'; mode: BoxMode; axis: number; coord: number }
   | { kind: 'box'; mode: BoxMode; start: Vec3; end: Vec3; axis: number; sign: number };
@@ -388,16 +392,55 @@ export class Viewport {
     this.setMirror(app.mirror);
   }
 
-  /** Points the camera at the whole model from a pleasant 3/4 angle. */
-  frame() {
+  /** Camera position and target that show the whole model from a pleasant 3/4 angle. */
+  private framePose(): { position: THREE.Vector3; target: THREE.Vector3 } {
     const g = editor.grid;
     const target = new THREE.Vector3(g.sx / 2, g.sy / 2, Math.min(g.sz, Math.max(g.sx, g.sy)) / 4);
     const diag = Math.hypot(g.sx, g.sy, g.sz);
     const dir = new THREE.Vector3(-0.55, -1, 0.75).normalize();
-    this.camera.position.copy(target).addScaledVector(dir, diag * 1.55 + 4);
+    return { position: target.clone().addScaledVector(dir, diag * 1.55 + 4), target };
+  }
+
+  /** Points the camera at the whole model from a pleasant 3/4 angle. */
+  frame() {
+    const { position, target } = this.framePose();
+    this.camera.position.copy(position);
     this.controls.target.copy(target);
     this.controls.update();
     this.requestRender();
+  }
+
+  /**
+   * PNG of the 3D view as base64 (no `data:` prefix), longest side at most
+   * `maxPx`. 'overview' uses a temporary framed camera, so the user's view is
+   * untouched. Null when the canvas has no size (window minimized or hidden).
+   */
+  snapshot(view: SnapshotView, maxPx: number): string | null {
+    const src = this.renderer.domElement;
+    if (!src.width || !src.height) return null;
+    if (this.dirtyChunks.size) this.flushChunks();
+    const camera = view === 'overview' ? this.overviewCamera() : this.camera;
+    // Copy right after rendering: without preserveDrawingBuffer the buffer is cleared once shown.
+    this.renderer.render(this.scene, camera);
+    const scale = Math.min(1, maxPx / Math.max(src.width, src.height));
+    const out = document.createElement('canvas');
+    out.width = Math.round(src.width * scale);
+    out.height = Math.round(src.height * scale);
+    const ctx2d = out.getContext('2d');
+    if (!ctx2d) throw new Error('This system cannot create a 2D canvas to scale the snapshot');
+    ctx2d.drawImage(src, 0, 0, out.width, out.height);
+    // Put the user's own view back before the browser shows this frame.
+    if (camera !== this.camera) this.renderer.render(this.scene, this.camera);
+    return out.toDataURL('image/png').slice(PNG_DATA_URL_PREFIX.length);
+  }
+
+  private overviewCamera(): THREE.PerspectiveCamera {
+    const camera = this.camera.clone();
+    const { position, target } = this.framePose();
+    camera.position.copy(position);
+    camera.lookAt(target);
+    camera.updateMatrixWorld();
+    return camera;
   }
 
   private resize() {

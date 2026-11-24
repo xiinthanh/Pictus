@@ -1,6 +1,7 @@
 // MCP tools that change the model. Each call is exactly one undo step, is
 // refused while the user is mid-drag or Pictus is busy, and validates every argument before
 // touching the model, so a rejected call changes nothing.
+import { fixThinContacts } from '../core/analysis';
 import { MAX_DIM, type VoxelGrid } from '../core/grid';
 import { MAX_COLORS, toCss } from '../core/palette';
 import { boxCells, cellsToIndices } from '../core/tools';
@@ -141,6 +142,22 @@ const fillBox: Tool = {
   },
 };
 
+const fixContacts: Tool = {
+  name: 'fix_thin_contacts',
+  title: 'Fix thin contacts',
+  description:
+    'Thickens every thin contact that print_check reports (voxels touching only along an edge or at a corner) ' +
+    'by filling neighbouring empty cells with an adjacent color, as one undo step. Contacts at the grid ' +
+    'boundary may be left; the reply says how many.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  run: (_args, ctx) => {
+    const { changes, remaining } = fixThinContacts(ctx.editor.grid);
+    const added = edit(ctx, () => ctx.editor.apply(changes));
+    const left = remaining ? ` ${remaining} contacts at the grid edge could not be fixed.` : '';
+    return [text(`Added ${added} voxels to thicken thin contacts.${left}${undoHint(added)}`)];
+  },
+};
+
 const newModel: Tool = {
   name: 'new_model',
   title: 'New model',
@@ -223,4 +240,4 @@ const undo: Tool = {
   },
 };
 
-export const EDIT_TOOLS: Tool[] = [setVoxels, fillBox, newModel, setColor, undo];
+export const EDIT_TOOLS: Tool[] = [setVoxels, fillBox, fixContacts, newModel, setColor, undo];

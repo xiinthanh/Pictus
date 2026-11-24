@@ -14,6 +14,8 @@ function makeCtx(isDirty = false, isBusy = false): ToolCtx {
     info: () => ({ name: 'Untitled', isDirty, isBusy, isLayerMode: false, layer: 0, color: 1 }),
     newModel: (sx, sy, sz) => editor.load({ grid: new VoxelGrid(sx, sy, sz), palette: defaultPalette(), voxelSize: 1 }),
     aiSteps: [],
+    highlight: () => undefined,
+    snapshot: () => null,
     notify: () => undefined,
   };
 }

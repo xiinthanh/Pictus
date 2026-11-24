@@ -2,10 +2,13 @@
 // app state: everything app-specific comes in through `ToolCtx`, so this file
 // runs under vitest without Svelte.
 import type { Editor } from '../core/editor';
+import type { Vec3 } from '../core/grid';
 import type { Change } from '../core/history';
 import { toCss } from '../core/palette';
 import { intArg, text } from './args';
+import type { SnapshotView } from '../render/viewport';
 import { EDIT_TOOLS } from './editTools';
+import { INSPECT_TOOLS } from './inspectTools';
 
 export type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
 
@@ -27,6 +30,10 @@ export interface ToolCtx {
   newModel(sx: number, sy: number, sz: number): void;
   /** Undo steps the AI made, oldest first, so its `undo` never reverts the user's own edits. */
   aiSteps: Change[];
+  /** Highlights cells in the 3D view, replacing any previous highlight; [] clears it. */
+  highlight(cells: Vec3[]): void;
+  /** Base64 PNG of the 3D view, or null when it can't be captured (window minimized, view not ready). */
+  snapshot(view: SnapshotView, maxPx: number): string | null;
   /** Tells the user which tool the AI just used. */
   notify(tool: string): void;
 }
@@ -94,4 +101,4 @@ const getLayer: Tool = {
   },
 };
 
-export const TOOLS: Tool[] = [getModel, getLayer, ...EDIT_TOOLS];
+export const TOOLS: Tool[] = [getModel, getLayer, ...INSPECT_TOOLS, ...EDIT_TOOLS];

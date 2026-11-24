@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { registerViewport } from '$lib/mcp/bridge';
   import { Viewport } from '$lib/render/viewport';
   import { app, editor } from '$lib/state/app.svelte';
   import Icon from './Icon.svelte';
@@ -9,7 +10,11 @@
 
   onMount(() => {
     view = new Viewport(el);
-    return () => view?.dispose();
+    registerViewport(view);
+    return () => {
+      registerViewport(null);
+      view?.dispose();
+    };
   });
 
   // A string, so effects re-run only when the grid dimensions actually change.

@@ -30,6 +30,8 @@ function makeCtx(editor = new Editor(), info = INFO): ToolCtx & { notified: stri
       throw new Error('newModel is not used by these tests');
     },
     aiSteps: [],
+    highlight: () => undefined,
+    snapshot: () => null,
     notify: (t) => notified.push(t),
   };
 }
@@ -261,8 +263,11 @@ describe('MCP tools (registry)', () => {
     expect(TOOLS.map((t) => t.name)).toEqual([
       'get_model',
       'get_layer',
+      'print_check',
+      'snapshot',
       'set_voxels',
       'fill_box',
+      'fix_thin_contacts',
       'new_model',
       'set_color',
       'undo',
