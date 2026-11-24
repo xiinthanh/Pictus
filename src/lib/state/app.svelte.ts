@@ -58,6 +58,8 @@ class AppState {
   confirm = $state<ConfirmRequest | null>(null);
   /** Open/save/import flows in progress; AI edits wait until it is back to 0. */
   busyTasks = $state(0);
+  /** The AI (MCP) connection is listening for Claude Code. */
+  isMcpOn = $state(false);
   recent = $state<string[]>(loadSetting(RECENT_KEY, parseRecent, []));
 
   addRecent(path: string) {

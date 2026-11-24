@@ -1,6 +1,7 @@
 <script lang="ts">
   import { exportVox, importImageWithConfirm, importVox, newWithConfirm, openFile, save, saveAs } from '$lib/actions';
   import { redo, undo } from '$lib/editing';
+  import { toggleConnection } from '$lib/mcp/bridge';
   import { baseName } from '$lib/platform/files';
   import { app, editor } from '$lib/state/app.svelte';
   import Icon from './Icon.svelte';
@@ -12,6 +13,18 @@
   function run(fn: () => unknown) {
     menu = null;
     fn();
+  }
+
+  /** A second click while connecting would read the token before the first click saved it. */
+  let isSwitchingAi = $state(false);
+
+  async function switchAi() {
+    isSwitchingAi = true;
+    try {
+      await toggleConnection();
+    } finally {
+      isSwitchingAi = false;
+    }
   }
 </script>
 
@@ -70,6 +83,14 @@
     title="Check the model for printing problems"
   >
     <span class="row"><Icon name="check" size={16} /> Print check</span>
+  </button>
+  <button
+    class:active={app.isMcpOn}
+    disabled={isSwitchingAi}
+    onclick={switchAi}
+    title={app.isMcpOn ? 'Claude Code can edit this model. Click to disconnect' : 'Let Claude Code edit this model'}
+  >
+    {app.isMcpOn ? 'AI on' : 'Connect AI'}
   </button>
   <button class="primary" onclick={() => (app.dialog = 'export')} title="Export for 3D printing (Ctrl+E)">
     Export…
