@@ -302,10 +302,12 @@ export class Viewport {
       0, 0, 0, 0, 0, sz, sx, 0, 0, sx, 0, sz, sx, sy, 0, sx, sy, sz, 0, sy, 0, 0, sy, sz,
     ];
     this.guides.add(lines(b, COLORS.bounds));
-    // Axis hints: X red, Y green along the floor edges.
+    // Axis hints from the origin, colored like the view cube: X red, Y green along the floor, Z blue up the
+    // corner (nudged outward so it doesn't overlap the bounds edge).
     const ax = lines([0, 0, 0.01, Math.min(sx, 4), 0, 0.01], 0xe53935);
     const ay = lines([0, 0, 0.01, 0, Math.min(sy, 4), 0.01], 0x43a047);
-    this.guides.add(ax, ay);
+    const az = lines([-0.01, -0.01, 0, -0.01, -0.01, Math.min(sz, 4)], 0x1e88e5);
+    this.guides.add(ax, ay, az);
     this.setMirror(app.mirror);
   }
 
