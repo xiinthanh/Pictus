@@ -24,12 +24,12 @@ This records where the implementation stands against [PLAN.md](PLAN.md): what is
 | Milestone | Status | Notes |
 | --- | --- | --- |
 | M1 Scaffold | Done | Tauri 2 + SvelteKit (SPA mode via adapter-static) + TS + Vite. Deps: `three`, `fflate`, `@tauri-apps/plugin-dialog`; dev: `vitest`, `@types/three`. |
-| M2 Core model and viewport | Code done | 16³ chunked meshing, grid DDA raycast, render on demand. |
-| M3 Editing tools | Code done | Place/erase/paint/pick/fill/box, X/Y/Z mirror, undo/redo, palette. |
-| M4 Layer view | Code done | 2D layer editor beside the 3D view; layers above the current one are hidden in 3D. |
-| M5 Files | Code done | `.pictus`, `.vox` import/export, PNG import, recent files, unsaved-changes prompt, "open with". |
-| M6 Export and printability | Code done, core tested | STL/OBJ/3MF, multi-color, print check with fixes. |
-| M7 Polish and installer | Code done | Dark UI, app icon, NSIS + MSI targets, `.pictus` file association. Installer not built yet. |
+| M2 Core model and viewport | Done, tested live | 16³ chunked meshing, grid DDA raycast, render on demand. |
+| M3 Editing tools | Done, tested live | Place/erase/paint/pick/fill/box, X/Y/Z mirror, undo/redo, palette. Click/drag bugs fixed in `19f5338`. |
+| M4 Layer view | Done, tested live | 2D layer editor beside the 3D view; layers above the current one are hidden in 3D. |
+| M5 Files | Done, tested live | `.pictus`, `.vox` import/export, PNG import, recent files, unsaved-changes prompt, "open with" (double-click, tested with the installed build). |
+| M6 Export and printability | Done, tested live | STL/OBJ/3MF, multi-color, print check with fixes. Not yet opened in a slicer. |
+| M7 Polish and installer | Done | Dark UI, app icon, NSIS + MSI installers built and installed; the `.pictus` file association works. Uninstall not yet checked. |
 
 ## Architecture
 
@@ -46,12 +46,12 @@ This records where the implementation stands against [PLAN.md](PLAN.md): what is
 | `src/lib/core/analysis.ts` | Loose parts (6-connected), thin contacts (edge/corner only), auto-fix. |
 | `src/lib/core/io/` | `pictus.ts`, `vox.ts`, `image.ts` (quantize, outline plate, keyring loop). |
 | `src/lib/core/export/` | `stl.ts` (binary), `obj.ts` (+MTL), `threemf.ts` (zip via fflate). |
-| `src/lib/render/viewport.ts` | Three.js scene, OrbitControls, chunk meshes, ghosts, box preview, slice/mirror planes, highlight. |
+| `src/lib/render/viewport.ts` | Three.js scene, OrbitControls, chunk meshes, ghosts, box preview, slice/mirror planes, highlight, animated view snaps (`viewFrom`). |
 | `src/lib/editing.ts` | Edit helpers shared by the 3D and 2D views. |
 | `src/lib/actions.ts` | New/open/save/save as/import/export `.vox`, unsaved-changes prompt. |
 | `src/lib/state/app.svelte.ts` | Svelte 5 rune state (`app`) and the single `editor`. |
 | `src/lib/platform/files.ts` | Wrappers over the dialog plugin and the Rust file commands. |
-| `src/lib/ui/` | MenuBar, Toolbar, SidePanel, StatusBar, ViewportView, SliceView, the dialogs, PrintCheckPanel. |
+| `src/lib/ui/` | MenuBar, Toolbar, SidePanel, StatusBar, ViewportView, CubeView, SliceView, the dialogs, PrintCheckPanel. |
 | `src/routes/+page.svelte` | Layout, keyboard shortcuts, window title, close prompt, startup file. |
 | `src-tauri/src/lib.rs` | `read_file`, `write_file` (raw binary body, hex-encoded path header), `startup_file`. |
 | `tests/` | `core`, `mesh`, `io` and `perf` specs, plus helpers (watertight check, volume). |
@@ -62,6 +62,7 @@ This records where the implementation stands against [PLAN.md](PLAN.md): what is
 - **Edge- and corner-only contacts in the mesh.** Vertices are split per "sheet". At a 4-face edge, faces are paired by solid cell, unless the two solids are connected around both ends of the edge; then they are paired by empty cell. The rule depends only on the edge, so both endpoints agree. Every edge ends up shared by exactly 2 triangles.
 - **Multi-color.** One closed body per color (faces between two colors appear in both bodies). In 3MF the bodies are components of one object, so slicers load them as parts of a single model.
 - **Viewport.** Rendering happens only on change. Edits rebuild only the affected 16³ chunks (plus neighbours on chunk borders). Flat per-face shading is baked into vertex colors with `MeshBasicMaterial`, so no lights are needed.
+- **View cube.** `CubeView.svelte` sits in the viewport's top-right corner and is drawn as SVG, not in WebGL. `Viewport.onCamera` passes it the camera rotation, and it projects the cube with a fixed orthographic projection, showing at most three faces. Each label is mapped onto its face with an SVG `matrix()` transform. Each face is split 3×3, giving 26 click targets (faces, edges, corners). A click calls `Viewport.viewFrom(dir)`, which swings the camera around the target over about 250 ms. Top and bottom views lean slightly toward −Y so the Z-up camera keeps a steady up direction. Clicking or scrolling the canvas, pressing F, or starting another snap cancels a running one. Because the cube is a separate DOM element, its clicks never reach the canvas's editing input. Face names follow the Z-up axes: Front = −Y, Right = +X, Top = +Z. The default framing (F) looks from front-right-top.
 
 ### `.pictus` format (v1, little endian)
 
@@ -143,6 +144,58 @@ Checked in the running app with Claude Code:
   | Per-color export meshes | ~2.9 s | |
   | Print analysis | ~240 ms | |
 
+### Live UI testing
+
+The running dev app (`pnpm tauri dev`) was driven with real mouse and keyboard input through Playwright, connected to WebView2's DevTools port:
+
+```powershell
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'; pnpm tauri dev
+```
+
+Clicks were aimed at known cells by reading the hovered cell from the status bar. Native file dialogs were answered at the IPC layer: Playwright intercepted the `ipc.localhost/plugin:dialog|open` and `|save` requests and answered with test paths. Everything after the dialog ran for real: encoding, the Rust file writes, decoding. The test scripts were throwaway and are not in the repo.
+
+**Bugs found and fixed** in `src/lib/render/viewport.ts` (commit `19f5338`):
+
+1. **Place added two voxels per click.** `onDown` re-ran `onMove`, whose plane through cell *centers* landed on a different cell than the clicked face.
+2. **Erase removed two voxels per click** and dug deeper while dragging, because the follow-up raycast hit the voxel behind.
+3. **The box rectangle was shifted and too small,** for the same plane reason.
+
+Drags now intersect the plane of the clicked face, erase and paint drags stay on the starting layer, and `onDown` no longer re-applies the tool.
+
+**Passing after the fix (no console errors):**
+
+| Area | Checks |
+| --- | --- |
+| 3D tools | Place, stack on a voxel, drag-place a row, undo/redo of a drag as one step, erase, mirror X places a pair, paint then pick reads the color back, box (height 1 and 3), fill recolors a connected slab |
+| 2D layer editor | Click places, drag draws a continuous line, right-click erases, PgUp changes layer |
+| Print check | Lists loose parts; "Keep only the main body" leaves one part |
+| Image import | 12×10 PNG with outline plate and keyring → 14×16×3, 3 colors, 267 voxels; title updates |
+| Save / New / Open | `.pictus` written; reopened model identical; no prompt right after saving; recent list updated |
+| Unsaved changes | Prompt on New; prompt on window close (real `WM_CLOSE`, like the title-bar X); Cancel keeps the app open |
+| Export | 3MF with 3 color parts; single STL; 3 per-color STLs; OBJ+MTL; status bar message |
+| `.vox` | Export, then re-import, inside the app gives an identical model |
+| Rust IPC | `write_file`/`read_file` round-trip of 70 KB of binary data to a path with a non-ASCII character |
+
+**View cube (added later, browser only).** Tested on the Vite dev server in headless Chrome through Playwright. `window.__TAURI_INTERNALS__` was stubbed, because outside Tauri `getCurrentWindow()` throws inside an `$effect` and stops Svelte's other effects from running. These checks pass with no console errors:
+
+- The default framing shows Front, Right and Top.
+- The cube turns with a right-drag orbit, and its labels are not mirrored.
+- Top gives a straight-down view.
+- The Front-Right-Top corner gives an isometric view.
+- F returns the camera to the default view.
+
+### Installer
+
+`pnpm tauri build` (2026-11-24, includes the viewport fix) produced:
+
+| File | Size |
+| --- | --- |
+| `src-tauri/target/release/bundle/nsis/Pictus_0.1.0_x64-setup.exe` | 1.5 MB |
+| `src-tauri/target/release/bundle/msi/Pictus_0.1.0_x64_en-US.msi` | 2.2 MB |
+| `src-tauri/target/release/pictus.exe` (the app itself) | 4.4 MB |
+
+Both installers are well under the ~10 MB target. The installer was run on the development laptop and installed correctly. **Double-clicking a `.pictus` file opens it in the installed Pictus**, so the file association and the startup-file command work. The installers aren't code-signed, so Windows SmartScreen warns on first run (More info → Run anyway).
+
 ### Not done yet
 
 - A full manual pass over the app: 3D view, tools, 2D layer editor, dialogs, saving, the close prompt, "open with".
@@ -162,6 +215,9 @@ Checked in the running app with Claude Code:
 - **No single-instance handling.** Double-clicking a `.pictus` file while Pictus is open starts a second window.
 - **CSP is `null`.** The app loads only local content, but a strict CSP could be added later.
 - **STL** has no vertex identity, so slicers merge coincident vertices at edge/corner contacts. Use the print check fix, or export 3MF.
+- **The default image-import plate color (#212121)** is barely visible against the dark viewport background, which makes the keyring loop hard to see. A lighter default would help.
+- **Clicking a face whose neighbouring cell is outside the grid** (e.g. the front face of a voxel on the grid edge) does nothing, and no hover ghost appears. That's correct, but there's no feedback telling you why.
+- **Toolbar settings** (box height, mirror, tool) carry over when you create or open a model. That's intended, but easy to miss.
 
 ## Next steps
 

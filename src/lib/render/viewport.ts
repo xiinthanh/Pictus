@@ -13,8 +13,8 @@ export type SnapshotView = 'current' | 'overview';
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
 
 type Drag =
-  | { kind: 'stroke'; mode: BoxMode; axis: number; coord: number }
-  | { kind: 'box'; mode: BoxMode; start: Vec3; end: Vec3; axis: number; sign: number };
+  | { kind: 'stroke'; mode: BoxMode; axis: number; plane: number; coord: number }
+  | { kind: 'box'; mode: BoxMode; start: Vec3; end: Vec3; axis: number; plane: number; sign: number };
 
 const COLORS = {
   background: 0x1b1d22,
@@ -51,6 +51,8 @@ export class Viewport {
   private isOrbitHeld = false;
   private isFrameRequested = false;
   private disposers: (() => void)[] = [];
+  /** Called with the camera's orientation whenever the camera moves. */
+  onCamera: ((q: THREE.Quaternion) => void) | null = null;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'default' });
@@ -64,7 +66,10 @@ export class Viewport {
     this.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
     this.controls.screenSpacePanning = true;
     this.controls.zoomToCursor = true;
-    this.controls.addEventListener('change', () => this.requestRender());
+    this.controls.addEventListener('change', () => {
+      this.requestRender();
+      this.onCamera?.(this.camera.quaternion);
+    });
 
     this.scene.add(this.chunkGroup, this.guides, this.mirrorPlanes);
 
@@ -115,6 +120,7 @@ export class Viewport {
       if (!this.drag) this.showTarget(null);
     });
     on(el, 'contextmenu', (e) => e.preventDefault());
+    on(el, 'wheel', () => this.cancelSnap());
     on(window, 'keydown', (e) => this.onKey(e as KeyboardEvent, true));
     on(window, 'keyup', (e) => this.onKey(e as KeyboardEvent, false));
     on(window, 'blur', () => this.setOrbitHeld(false));
@@ -128,6 +134,8 @@ export class Viewport {
   }
 
   dispose() {
+    this.cancelSnap();
+    this.onCamera = null;
     for (const d of this.disposers) d();
     this.controls.dispose();
     for (const m of this.chunks.values()) m.geometry.dispose();
@@ -385,10 +393,12 @@ export class Viewport {
       sz,
     ];
     this.guides.add(lines(b, COLORS.bounds));
-    // Axis hints: X red, Y green along the floor edges.
+    // Axis hints from the origin, colored like the view cube: X red, Y green along the floor, Z blue up the
+    // corner (nudged outward so it doesn't overlap the bounds edge).
     const ax = lines([0, 0, 0.01, Math.min(sx, 4), 0, 0.01], 0xe53935);
     const ay = lines([0, 0, 0.01, 0, Math.min(sy, 4), 0.01], 0x43a047);
-    this.guides.add(ax, ay);
+    const az = lines([-0.01, -0.01, 0, -0.01, -0.01, Math.min(sz, 4)], 0x1e88e5);
+    this.guides.add(ax, ay, az);
     this.setMirror(app.mirror);
   }
 
@@ -408,6 +418,40 @@ export class Viewport {
     this.controls.target.copy(target);
     this.controls.update();
     this.requestRender();
+    this.onCamera?.(this.camera.quaternion);
+  }
+
+  /** Current camera orientation (a copy). */
+  orientation(): THREE.Quaternion {
+    return this.camera.quaternion.clone();
+  }
+
+  /** Smoothly orbits the camera to look at the target from direction `dir`, keeping the distance. */
+  viewFrom(dir: Vec3) {
+    this.cancelSnap();
+    const target = this.controls.target.clone();
+    const offset = this.camera.position.clone().sub(target);
+    const dist = offset.length();
+    const from = offset.normalize();
+    const to = new THREE.Vector3(...dir).normalize();
+    // Straight up/down is degenerate with a Z-up camera; lean slightly toward -Y so Front stays at the bottom.
+    if (Math.abs(to.z) > 0.9999) to.set(0, -1e-3, Math.sign(to.z)).normalize();
+    const full = new THREE.Quaternion().setFromUnitVectors(from, to);
+    const step = new THREE.Quaternion();
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / 250);
+      step.identity().slerp(full, 1 - (1 - t) ** 3);
+      this.camera.position.copy(from).applyQuaternion(step).multiplyScalar(dist).add(target);
+      this.controls.update();
+      this.snapRaf = t < 1 ? requestAnimationFrame(tick) : 0;
+    };
+    this.snapRaf = requestAnimationFrame(tick);
+  }
+
+  private cancelSnap() {
+    if (this.snapRaf) cancelAnimationFrame(this.snapRaf);
+    this.snapRaf = 0;
   }
 
   /**
@@ -497,7 +541,7 @@ export class Viewport {
    */
   private planeCell(e: PointerEvent, axis: number, coord: number, shouldClamp: boolean): Vec3 | null {
     const { o, d } = this.ray(e);
-    const t = rayPlane(o, d, axis, coord + 0.5);
+    const t = rayPlane(o, d, axis, plane);
     if (t === null) return null;
     const c = [0, 1, 2].map((k) => (k === axis ? coord : Math.floor(o[k] + d[k] * t))) as Vec3;
     const g = editor.grid;
@@ -518,18 +562,21 @@ export class Viewport {
     this.renderer.domElement.setPointerCapture(e.pointerId);
     if (!hit) return;
     const axis = hit.normal.findIndex((v) => v !== 0);
+    // Plane of the clicked face (the floor is z = 0).
+    const plane = hit.cell ? hit.cell[axis] + (hit.normal[axis] > 0 ? 1 : 0) : 0;
     switch (tool) {
       case 'place':
         if (!hit.place) return;
         editor.beginStroke();
-        this.drag = { kind: 'stroke', mode: 'add', axis, coord: hit.place[axis] };
+        this.drag = { kind: 'stroke', mode: 'add', axis, plane, coord: hit.place[axis] };
         editCells([hit.place], 'add');
         break;
       case 'erase':
       case 'paint':
         if (!hit.cell) return;
         editor.beginStroke();
-        this.drag = { kind: 'stroke', mode: tool === 'erase' ? 'erase' : 'paint', axis, coord: 0 };
+        // Dragging stays on the starting layer, so erasing doesn't dig into the model.
+        this.drag = { kind: 'stroke', mode: tool === 'erase' ? 'erase' : 'paint', axis, plane, coord: hit.cell[axis] };
         editCells([hit.cell], this.drag.mode);
         break;
       case 'pick':
@@ -544,18 +591,19 @@ export class Viewport {
         if (!start) return;
         // Add grows outward from the clicked face; erase/paint go into the model.
         const sign = (mode === 'add' ? 1 : -1) * hit.normal[axis];
-        this.drag = { kind: 'box', mode, start, end: start, axis, sign };
+        this.drag = { kind: 'box', mode, start, end: start, axis, plane, sign };
         this.updateBoxPreview();
         break;
       }
     }
-    this.onMove(e);
+    // Refresh the hover ghost after a one-shot edit (pick/fill). Drags update on the next move.
+    if (!this.drag) this.onMove(e);
   }
 
   private onMove(e: PointerEvent) {
     const drag = this.drag;
     if (drag?.kind === 'box') {
-      const c = this.planeCell(e, drag.axis, drag.start[drag.axis], true);
+      const c = this.planeCell(e, drag.axis, drag.plane, drag.start[drag.axis], true);
       if (c) {
         drag.end = c;
         this.updateBoxPreview();
@@ -563,9 +611,9 @@ export class Viewport {
       app.hover = drag.end;
       return;
     }
-    if (drag?.kind === 'stroke' && drag.mode === 'add') {
-      const c = this.planeCell(e, drag.axis, drag.coord, false);
-      if (c) editCells([c], 'add');
+    if (drag?.kind === 'stroke') {
+      const c = this.planeCell(e, drag.axis, drag.plane, drag.coord, false);
+      if (c) editCells([c], drag.mode);
       this.showTarget(c);
       return;
     }

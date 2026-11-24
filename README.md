@@ -10,6 +10,8 @@ A lightweight Windows app for making 3D pixel (voxel) models and exporting them 
 
 ## Development
 
+Working on Pictus with the team? Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+
 Requirements: Node 22+, pnpm, Rust (MSVC toolchain), and the Visual Studio Build Tools **"Desktop development with C++"** workload.
 
 ```sh

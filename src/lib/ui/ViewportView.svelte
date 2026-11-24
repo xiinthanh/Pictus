@@ -3,6 +3,7 @@
   import { registerViewport } from '$lib/mcp/bridge';
   import { Viewport } from '$lib/render/viewport';
   import { app, editor } from '$lib/state/app.svelte';
+  import CubeView from './CubeView.svelte';
   import Icon from './Icon.svelte';
 
   let el: HTMLDivElement;
@@ -39,6 +40,7 @@
 
 <div class="wrap">
   <div class="viewport" bind:this={el}></div>
+  <div class="cubeview"><CubeView {view} /></div>
   <button class="frame" title="Frame the model (F)" aria-label="Frame the model" onclick={() => view?.frame()}>
     <Icon name="frame" size={16} />
   </button>
@@ -60,9 +62,16 @@
     display: block;
     touch-action: none;
   }
-  .frame {
+  .cubeview {
     position: absolute;
     top: 10px;
+    right: 10px;
+    display: flex;
+    pointer-events: none;
+  }
+  .frame {
+    position: absolute;
+    top: 128px;
     right: 10px;
     padding: 5px 6px;
     display: grid;

@@ -1,0 +1,11 @@
+# Store and check out text files with LF on every machine (stops CRLF warnings and noisy diffs).
+* text=auto eol=lf
+
+# Binary assets
+*.png  binary
+*.ico  binary
+*.icns binary
+*.pictus binary
+*.vox  binary
+*.stl  binary
+*.3mf  binary
