@@ -9,8 +9,8 @@ import { boxRegion, editCells, fillAt, pickAt } from '$lib/editing';
 import { app, editor, type BoxMode } from '$lib/state/app.svelte';
 
 type Drag =
-  | { kind: 'stroke'; mode: BoxMode; axis: number; coord: number }
-  | { kind: 'box'; mode: BoxMode; start: Vec3; end: Vec3; axis: number; sign: number };
+  | { kind: 'stroke'; mode: BoxMode; axis: number; plane: number; coord: number }
+  | { kind: 'box'; mode: BoxMode; start: Vec3; end: Vec3; axis: number; plane: number; sign: number };
 
 const COLORS = {
   background: 0x1b1d22,
@@ -349,12 +349,13 @@ export class Viewport {
   }
 
   /**
-   * Cell on the plane `axis = coord` under the pointer (plane through cell centers).
+   * Cell in layer `axis = coord` under the pointer, found by intersecting the ray with
+   * the plane of the face the drag started on (`plane`), so it matches what was clicked.
    * With `clamp`, positions outside the grid snap to its border; otherwise they return null.
    */
-  private planeCell(e: PointerEvent, axis: number, coord: number, clamp: boolean): Vec3 | null {
+  private planeCell(e: PointerEvent, axis: number, plane: number, coord: number, clamp: boolean): Vec3 | null {
     const { o, d } = this.ray(e);
-    const t = rayPlane(o, d, axis, coord + 0.5);
+    const t = rayPlane(o, d, axis, plane);
     if (t === null) return null;
     const c = [0, 1, 2].map((k) => (k === axis ? coord : Math.floor(o[k] + d[k] * t))) as Vec3;
     const g = editor.grid;
@@ -375,18 +376,21 @@ export class Viewport {
     this.renderer.domElement.setPointerCapture(e.pointerId);
     if (!hit) return;
     const axis = hit.normal.findIndex((v) => v !== 0);
+    // Plane of the clicked face (the floor is z = 0).
+    const plane = hit.cell ? hit.cell[axis] + (hit.normal[axis] > 0 ? 1 : 0) : 0;
     switch (tool) {
       case 'place':
         if (!hit.place) return;
         editor.beginStroke();
-        this.drag = { kind: 'stroke', mode: 'add', axis, coord: hit.place[axis] };
+        this.drag = { kind: 'stroke', mode: 'add', axis, plane, coord: hit.place[axis] };
         editCells([hit.place], 'add');
         break;
       case 'erase':
       case 'paint':
         if (!hit.cell) return;
         editor.beginStroke();
-        this.drag = { kind: 'stroke', mode: tool === 'erase' ? 'erase' : 'paint', axis, coord: 0 };
+        // Dragging stays on the starting layer, so erasing doesn't dig into the model.
+        this.drag = { kind: 'stroke', mode: tool === 'erase' ? 'erase' : 'paint', axis, plane, coord: hit.cell[axis] };
         editCells([hit.cell], this.drag.mode);
         break;
       case 'pick':
@@ -401,18 +405,19 @@ export class Viewport {
         if (!start) return;
         // Add grows outward from the clicked face; erase/paint go into the model.
         const sign = (mode === 'add' ? 1 : -1) * hit.normal[axis];
-        this.drag = { kind: 'box', mode, start, end: start, axis, sign };
+        this.drag = { kind: 'box', mode, start, end: start, axis, plane, sign };
         this.updateBoxPreview();
         break;
       }
     }
-    this.onMove(e);
+    // Refresh the hover ghost after a one-shot edit (pick/fill). Drags update on the next move.
+    if (!this.drag) this.onMove(e);
   }
 
   private onMove(e: PointerEvent) {
     const drag = this.drag;
     if (drag?.kind === 'box') {
-      const c = this.planeCell(e, drag.axis, drag.start[drag.axis], true);
+      const c = this.planeCell(e, drag.axis, drag.plane, drag.start[drag.axis], true);
       if (c) {
         drag.end = c;
         this.updateBoxPreview();
@@ -420,14 +425,13 @@ export class Viewport {
       app.hover = drag.end;
       return;
     }
-    if (drag?.kind === 'stroke' && drag.mode === 'add') {
-      const c = this.planeCell(e, drag.axis, drag.coord, false);
-      if (c) editCells([c], 'add');
+    if (drag?.kind === 'stroke') {
+      const c = this.planeCell(e, drag.axis, drag.plane, drag.coord, false);
+      if (c) editCells([c], drag.mode);
       this.showTarget(c);
       return;
     }
     const hit = this.orbitHeld ? null : this.hit(e);
-    if (drag?.kind === 'stroke' && hit?.cell) editCells([hit.cell], drag.mode);
     const placing = app.tool === 'place' || (app.tool === 'box' && app.boxMode === 'add');
     this.showTarget(hit ? (placing ? hit.place : hit.cell) : null);
   }
