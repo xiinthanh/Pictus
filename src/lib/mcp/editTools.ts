@@ -9,7 +9,14 @@ import type { Tool, ToolCtx } from './tools';
 
 /** The AI sends each cell explicitly; larger shapes should use fill_box or several calls. */
 export const MAX_VOXELS_PER_CALL = 20_000;
-const UNDO_HINT = 'The user can undo it with Ctrl+Z; you can with the undo tool.';
+/** A `set_voxels` entry: [x, y, z, color]. */
+const VOXEL_ENTRY_LENGTH = 4;
+const CELL_LENGTH = VOXEL_ENTRY_LENGTH - 1;
+
+/** Only an edit that recorded an undo step can be undone; don't suggest it otherwise. */
+function undoHint(changed: number): string {
+  return changed > 0 ? ' The user can undo it with Ctrl+Z; you can with the undo tool.' : '';
+}
 
 /**
  * Edits must wait while the user draws (they'd merge into the user's stroke) and
@@ -33,22 +40,26 @@ function forgetDroppedSteps(ctx: ToolCtx): void {
   aiSteps.splice(0, aiSteps.length, ...kept);
 }
 
-/** Runs `change` as one undo step and remembers that step as the AI's. Returns the number of cells changed. */
-function edit(ctx: ToolCtx, change: () => number): number {
+/**
+ * Runs `change` as one undo step and remembers that step as the AI's. Returns
+ * the cells in the recorded step, i.e. those whose value really changed (writes
+ * that cancel out, like setting a cell then clearing it, don't count).
+ */
+function edit(ctx: ToolCtx, change: () => void): number {
   refuseWhileBusy(ctx);
   const { editor, aiSteps } = ctx;
   const before = editor.history.lastUndo;
   editor.beginStroke();
-  let changed: number;
   try {
-    changed = change();
+    change();
   } finally {
     editor.endStroke();
   }
   const step = editor.history.lastUndo;
-  if (step && step !== before) aiSteps.push(step);
+  const isNewStep = step !== null && step !== before;
+  if (isNewStep) aiSteps.push(step);
   forgetDroppedSteps(ctx);
-  return changed;
+  return isNewStep ? step.idx.length : 0;
 }
 
 /** `[index, color]` pairs for `voxels`, or an error naming the first bad entry. */
@@ -60,15 +71,20 @@ function voxelsArg(args: Record<string, unknown>, grid: VoxelGrid, paletteLength
   }
   return list.map((entry: unknown, i): [number, number] => {
     const label = `voxels[${i}]`;
-    if (!Array.isArray(entry) || entry.length !== 4) {
+    if (!Array.isArray(entry) || entry.length !== VOXEL_ENTRY_LENGTH) {
       throw new Error(`'${label}' must be [x, y, z, color] (got ${JSON.stringify(entry) ?? 'nothing'}).`);
     }
-    const [x, y, z] = cellValue(entry.slice(0, 3), label, grid);
-    return [grid.index(x, y, z), colorValue(entry[3], `${label} color`, paletteLength)];
+    const [x, y, z] = cellValue(entry.slice(0, CELL_LENGTH), label, grid);
+    return [grid.index(x, y, z), colorValue(entry[CELL_LENGTH], `${label} color`, paletteLength)];
   });
 }
 
-const CELL_SCHEMA = { type: 'array', items: { type: 'integer', minimum: 0 }, minItems: 3, maxItems: 3 };
+const CELL_SCHEMA = {
+  type: 'array',
+  items: { type: 'integer', minimum: 0 },
+  minItems: CELL_LENGTH,
+  maxItems: CELL_LENGTH,
+};
 const COLOR_SCHEMA = { type: 'integer', minimum: 0, description: 'Palette index; 0 erases.' };
 
 const setVoxels: Tool = {
@@ -84,7 +100,12 @@ const setVoxels: Tool = {
         type: 'array',
         minItems: 1,
         maxItems: MAX_VOXELS_PER_CALL,
-        items: { type: 'array', items: { type: 'integer', minimum: 0 }, minItems: 4, maxItems: 4 },
+        items: {
+          type: 'array',
+          items: { type: 'integer', minimum: 0 },
+          minItems: VOXEL_ENTRY_LENGTH,
+          maxItems: VOXEL_ENTRY_LENGTH,
+        },
       },
     },
     required: ['voxels'],
@@ -93,7 +114,7 @@ const setVoxels: Tool = {
   run: (args, ctx) => {
     const pairs = voxelsArg(args, ctx.editor.grid, ctx.editor.palette.length);
     const changed = edit(ctx, () => ctx.editor.apply(pairs));
-    return [text(`Changed ${changed} of ${pairs.length} cells (the rest already had that color). ${UNDO_HINT}`)];
+    return [text(`Changed ${changed} of ${pairs.length} cells.${undoHint(changed)}`)];
   },
 };
 
@@ -116,7 +137,7 @@ const fillBox: Tool = {
     const color = colorValue(args.color, 'color', palette.length);
     const idx = cellsToIndices(grid, boxCells(grid, from, to));
     const changed = edit(ctx, () => ctx.editor.fill(idx, color));
-    return [text(`Changed ${changed} of ${idx.length} cells in the box to color ${color}. ${UNDO_HINT}`)];
+    return [text(`Changed ${changed} of ${idx.length} cells in the box to color ${color}.${undoHint(changed)}`)];
   },
 };
 

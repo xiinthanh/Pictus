@@ -81,6 +81,31 @@ describe('set_voxels', () => {
     expect([out.startsWith('Changed 0 of 1'), ctx.aiSteps.length]).toEqual([true, 0]);
   });
 
+  it('reports only cells whose value really changed when an entry cancels another', async () => {
+    const ctx = makeCtx();
+    const out = await run(
+      'set_voxels',
+      {
+        voxels: [
+          [0, 0, 0, 5],
+          [0, 0, 0, 0],
+        ],
+      },
+      ctx,
+    );
+    expect(out.startsWith('Changed 0 of 2')).toBe(true);
+  });
+
+  it('offers no undo hint when nothing changed', async () => {
+    const out = await run('set_voxels', { voxels: [[0, 0, 0, 0]] }, makeCtx());
+    expect(out).not.toMatch(/Ctrl\+Z/);
+  });
+
+  it('offers the undo hint when cells changed', async () => {
+    const out = await run('set_voxels', { voxels: [[0, 0, 0, 1]] }, makeCtx());
+    expect(out).toMatch(/Ctrl\+Z/);
+  });
+
   it.each([
     ['x past the edge', [4, 0, 0, 1], /'voxels\[1\] x' must be a whole number from 0 to 3/],
     ['a negative z', [0, 0, -1, 1], /'voxels\[1\] z' must be a whole number from 0 to 1/],

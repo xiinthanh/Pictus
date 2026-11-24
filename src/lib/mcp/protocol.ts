@@ -15,8 +15,8 @@ export const INSTRUCTIONS = [
   'Pictus is a voxel editor for 3D printing. These tools edit the model that is open in the app; the user watches every edit live.',
   'Coordinates are integers: x and y are horizontal, z points up (z is the layer). Cell (0,0,0) is a corner; each axis runs from 0 to size-1.',
   'Colors are palette indices starting at 1; 0 means empty. Call get_model first to learn the size and the palette.',
-  'Every tool call is one undo step for the user. One voxel prints as voxelSize millimetres.',
-  'Edits are refused while the user is drawing; retry shortly. The undo tool only reverts your own latest edits.',
+  'Each set_voxels or fill_box call is one undo step for the user. set_color and new_model cannot be undone. One voxel prints as voxelSize millimetres.',
+  'Edits are refused while the user is drawing or has a dialog open; retry shortly. The undo tool only reverts your own edits.',
 ].join('\n');
 
 /**
