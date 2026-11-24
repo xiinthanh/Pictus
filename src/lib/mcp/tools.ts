@@ -10,6 +10,7 @@ export type Content = { type: 'text'; text: string } | { type: 'image'; data: st
 export interface AppInfo {
   name: string;
   isDirty: boolean;
+  isLayerMode: boolean;
   layer: number;
   color: number;
 }
@@ -50,8 +51,9 @@ const getModel: Tool = {
   title: 'Get model',
   description:
     'Describes the model open in Pictus: grid size, voxel count, voxel size in mm, the color palette ' +
-    '(index -> #rrggbb; index 0 is empty) and editor state (file name, unsaved changes, current layer and color). ' +
-    'Call this first.',
+    '(index -> #rrggbb; index 0 is empty) and editor state (file name, unsaved changes, current color, ' +
+    'and the layer view). layerView.z is 0-based like every coordinate here; the UI labels that layer ' +
+    'z+1 (layerView.shownInUiAs). Call this first.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   run: (_args, ctx) => {
     const { grid, palette, voxelSize } = ctx.editor;
@@ -63,8 +65,9 @@ const getModel: Tool = {
       voxelSizeMm: voxelSize,
       voxelCount: grid.count(),
       palette: palette.slice(1).map((c, i) => ({ index: i + 1, hex: toCss(c) })),
-      currentLayer: info.layer,
       currentColor: info.color,
+      // The app keeps its last layer while the view is off; reporting it would point the AI at a stale layer.
+      layerView: info.isLayerMode ? { isOn: true, z: info.layer, shownInUiAs: info.layer + 1 } : { isOn: false },
     };
     return [text(JSON.stringify(summary, null, 2))];
   },

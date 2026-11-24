@@ -18,7 +18,7 @@ const META = {
   'io.modelcontextprotocol/clientInfo': { name: 't', version: '1' },
 };
 
-const INFO: AppInfo = { name: 'Untitled', isDirty: false, layer: 0, color: 1 };
+const INFO: AppInfo = { name: 'Untitled', isDirty: false, isLayerMode: false, layer: 0, color: 1 };
 
 function makeCtx(editor = new Editor(), info = INFO): ToolCtx & { notified: string[] } {
   const notified: string[] = [];
@@ -271,9 +271,21 @@ describe('MCP tool get_model', () => {
   });
 
   it('includes the editor state from the app', async () => {
-    const info: AppInfo = { name: 'boat.pictus', isDirty: true, layer: 5, color: 3 };
+    const info: AppInfo = { name: 'boat.pictus', isDirty: true, isLayerMode: false, layer: 5, color: 3 };
     const m = JSON.parse(await runText('get_model', {}, makeCtx(smallEditor(), info)));
-    expect(m).toMatchObject({ name: 'boat.pictus', hasUnsavedChanges: true, currentLayer: 5, currentColor: 3 });
+    expect(m).toMatchObject({ name: 'boat.pictus', hasUnsavedChanges: true, currentColor: 3 });
+  });
+
+  it('reports the layer view as off without a stale layer number', async () => {
+    const info: AppInfo = { ...INFO, isLayerMode: false, layer: 5 };
+    const m = JSON.parse(await runText('get_model', {}, makeCtx(smallEditor(), info)));
+    expect(m.layerView).toEqual({ isOn: false });
+  });
+
+  it('reports the open layer as 0-based z and as the number the UI shows', async () => {
+    const info: AppInfo = { ...INFO, isLayerMode: true, layer: 5 };
+    const m = JSON.parse(await runText('get_model', {}, makeCtx(smallEditor(), info)));
+    expect(m.layerView).toEqual({ isOn: true, z: 5, shownInUiAs: 6 });
   });
 
   it('reports zero voxels for an empty model', async () => {

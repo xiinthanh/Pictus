@@ -16,7 +16,13 @@ interface McpEvent extends HttpIn {
 
 const ctx: ToolCtx = {
   editor,
-  info: () => ({ name: app.docName, isDirty: app.isDirty, layer: app.layer, color: app.color }),
+  info: () => ({
+    name: app.docName,
+    isDirty: app.isDirty,
+    isLayerMode: app.isLayerMode,
+    layer: app.layer,
+    color: app.color,
+  }),
   notify: (tool) => app.flash(`AI: ${tool}`),
 };
 
