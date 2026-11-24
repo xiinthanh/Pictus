@@ -70,7 +70,7 @@ export async function startMcp(port: number, token: string): Promise<void> {
   } catch (e) {
     unlisten();
     unlisten = null;
-    throw new Error(errorText(e));
+    throw new Error(errorText(e), { cause: e });
   }
   app.mcpOn = true;
 }

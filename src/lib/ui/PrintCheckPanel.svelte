@@ -30,6 +30,7 @@
   }
 
   function contactCells(): Vec3[] {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local de-dup set, never rendered or stored
     const seen = new Set<string>();
     const out: Vec3[] = [];
     for (const v of report.contacts)
