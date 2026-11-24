@@ -15,8 +15,9 @@ This records where the implementation stands against [PLAN.md](PLAN.md): what is
 | Type-check (`pnpm check`) | 0 errors, 0 warnings |
 | Frontend build (`pnpm build`) | Succeeds |
 | Rust build and tests (`cargo build`, `cargo test`) | Succeed; 10/10 tests pass. Uses the MSVC toolchain from Visual Studio Community 2026 |
-| App run in Tauri (`pnpm tauri dev`) | Runs; exercised while building the MCP feature, no full manual pass yet |
-| Installer (`pnpm tauri build`) | **Not yet run** |
+| App run in Tauri (`pnpm tauri dev`) | Runs; live UI tests pass after one fix (see [Live UI testing](#live-ui-testing)); exercised while building the MCP feature, no full manual pass yet |
+| Installer (`pnpm tauri build`) | Built and installed before the MCP work; double-clicking a `.pictus` file opens it in Pictus. **Not yet rebuilt with the MCP code** |
+| Slicer check of exports | **Not yet done** |
 | Git | Committed: `master`, plus the `feat/mcp` branch |
 
 ## Milestone status
@@ -200,7 +201,10 @@ Both installers are well under the ~10 MB target. The installer was run on the d
 
 - A full manual pass over the app: 3D view, tools, 2D layer editor, dialogs, saving, the close prompt, "open with".
 - The **Connect AI** button in an installed build: first-time registration and reconnecting at launch.
-- `pnpm tauri build`: install, double-click a `.pictus` file, uninstall.
+- `pnpm tauri build` with the MCP code: install and double-click a `.pictus` file again.
+- The native file dialogs themselves (intercepted in the tests above).
+- The view cube inside the Tauri app (`pnpm tauri dev`); so far it has only been tested in a browser.
+- Uninstalling through Settings → Apps.
 - Opening exports in PrusaSlicer, Bambu Studio or Orca (repair warnings, parts per color, dimensions).
 - `.vox` round-trip through MagicaVoxel itself.
 - Frame rate on a laptop's integrated GPU with a full 128³ model.
@@ -223,5 +227,9 @@ Both installers are well under the ~10 MB target. The installer was run on the d
 
 1. Work through the manual checks in [PLAN.md](PLAN.md#tests-and-verification) with `pnpm tauri dev`. Fix whatever turns up.
 2. Run `pnpm tauri build` and test the installer, the file association and the Connect AI button.
-3. Check exports in a slicer.
-4. Take on the follow-ups above as needed.
+3. Try the real Open and Export dialogs once in the installed app.
+4. Check memory (target under 200 MB) and frame rate with a full 128³ model on the laptop.
+5. Check exports in a slicer (PrusaSlicer / Bambu Studio / Orca).
+6. Check that uninstalling removes Pictus cleanly.
+7. Consider adding the live UI test as a repeatable script (Playwright over the WebView2 debug port).
+8. Take on the follow-ups above as needed.

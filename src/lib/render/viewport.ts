@@ -50,6 +50,7 @@ export class Viewport {
   private drag: Drag | null = null;
   private isOrbitHeld = false;
   private isFrameRequested = false;
+  private snapRaf = 0;
   private disposers: (() => void)[] = [];
   /** Called with the camera's orientation whenever the camera moves. */
   onCamera: ((q: THREE.Quaternion) => void) | null = null;
@@ -407,12 +408,14 @@ export class Viewport {
     const g = editor.grid;
     const target = new THREE.Vector3(g.sx / 2, g.sy / 2, Math.min(g.sz, Math.max(g.sx, g.sy)) / 4);
     const diag = Math.hypot(g.sx, g.sy, g.sz);
-    const dir = new THREE.Vector3(-0.55, -1, 0.75).normalize();
+    // From the front-right-top (+X, -Y, +Z), the usual CAD home view.
+    const dir = new THREE.Vector3(0.55, -1, 0.75).normalize();
     return { position: target.clone().addScaledVector(dir, diag * 1.55 + 4), target };
   }
 
   /** Points the camera at the whole model from a pleasant 3/4 angle. */
   frame() {
+    this.cancelSnap();
     const { position, target } = this.framePose();
     this.camera.position.copy(position);
     this.controls.target.copy(target);
@@ -536,10 +539,11 @@ export class Viewport {
   }
 
   /**
-   * Cell on the plane `axis = coord` under the pointer (plane through cell centers).
+   * Cell in layer `axis = coord` under the pointer, found by intersecting the ray with
+   * the plane of the face the drag started on (`plane`), so it matches what was clicked.
    * With `shouldClamp`, positions outside the grid snap to its border; otherwise they return null.
    */
-  private planeCell(e: PointerEvent, axis: number, coord: number, shouldClamp: boolean): Vec3 | null {
+  private planeCell(e: PointerEvent, axis: number, plane: number, coord: number, shouldClamp: boolean): Vec3 | null {
     const { o, d } = this.ray(e);
     const t = rayPlane(o, d, axis, plane);
     if (t === null) return null;
@@ -556,6 +560,7 @@ export class Viewport {
   }
 
   private onDown(e: PointerEvent) {
+    this.cancelSnap();
     if (e.button !== 0 || this.isOrbitHeld) return;
     const hit = this.hit(e);
     const tool = app.tool;
@@ -618,7 +623,6 @@ export class Viewport {
       return;
     }
     const hit = this.isOrbitHeld ? null : this.hit(e);
-    if (drag?.kind === 'stroke' && hit?.cell) editCells([hit.cell], drag.mode);
     const isPlacing = app.tool === 'place' || (app.tool === 'box' && app.boxMode === 'add');
     this.showTarget(hit ? (isPlacing ? hit.place : hit.cell) : null);
   }
