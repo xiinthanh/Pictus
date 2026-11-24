@@ -46,7 +46,10 @@ export class Viewport {
   private drag: Drag | null = null;
   private orbitHeld = false;
   private frameRequested = false;
+  private snapRaf = 0;
   private disposers: (() => void)[] = [];
+  /** Called with the camera's orientation whenever the camera moves. */
+  onCamera: ((q: THREE.Quaternion) => void) | null = null;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'default' });
@@ -60,7 +63,10 @@ export class Viewport {
     this.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
     this.controls.screenSpacePanning = true;
     this.controls.zoomToCursor = true;
-    this.controls.addEventListener('change', () => this.requestRender());
+    this.controls.addEventListener('change', () => {
+      this.requestRender();
+      this.onCamera?.(this.camera.quaternion);
+    });
 
     this.scene.add(this.chunkGroup, this.guides, this.mirrorPlanes);
 
@@ -96,6 +102,7 @@ export class Viewport {
     on(el, 'pointercancel', (e) => this.onUp(e));
     on(el, 'pointerleave', () => { if (!this.drag) this.showTarget(null); });
     on(el, 'contextmenu', (e) => e.preventDefault());
+    on(el, 'wheel', () => this.cancelSnap());
     on(window, 'keydown', (e) => this.onKey(e as KeyboardEvent, true));
     on(window, 'keyup', (e) => this.onKey(e as KeyboardEvent, false));
     on(window, 'blur', () => this.setOrbitHeld(false));
@@ -109,6 +116,8 @@ export class Viewport {
   }
 
   dispose() {
+    this.cancelSnap();
+    this.onCamera = null;
     for (const d of this.disposers) d();
     this.controls.dispose();
     for (const m of this.chunks.values()) m.geometry.dispose();
@@ -293,23 +302,61 @@ export class Viewport {
       0, 0, 0, 0, 0, sz, sx, 0, 0, sx, 0, sz, sx, sy, 0, sx, sy, sz, 0, sy, 0, 0, sy, sz,
     ];
     this.guides.add(lines(b, COLORS.bounds));
-    // Axis hints: X red, Y green along the floor edges.
+    // Axis hints from the origin, colored like the view cube: X red, Y green along the floor, Z blue up the
+    // corner (nudged outward so it doesn't overlap the bounds edge).
     const ax = lines([0, 0, 0.01, Math.min(sx, 4), 0, 0.01], 0xe53935);
     const ay = lines([0, 0, 0.01, 0, Math.min(sy, 4), 0.01], 0x43a047);
-    this.guides.add(ax, ay);
+    const az = lines([-0.01, -0.01, 0, -0.01, -0.01, Math.min(sz, 4)], 0x1e88e5);
+    this.guides.add(ax, ay, az);
     this.setMirror(app.mirror);
   }
 
   /** Points the camera at the whole model from a pleasant 3/4 angle. */
   frame() {
+    this.cancelSnap();
     const g = editor.grid;
     const target = new THREE.Vector3(g.sx / 2, g.sy / 2, Math.min(g.sz, Math.max(g.sx, g.sy)) / 4);
     const diag = Math.hypot(g.sx, g.sy, g.sz);
-    const dir = new THREE.Vector3(-0.55, -1, 0.75).normalize();
+    // From the front-right-top (+X, -Y, +Z), the usual CAD home view.
+    const dir = new THREE.Vector3(0.55, -1, 0.75).normalize();
     this.camera.position.copy(target).addScaledVector(dir, diag * 1.55 + 4);
     this.controls.target.copy(target);
     this.controls.update();
     this.requestRender();
+    this.onCamera?.(this.camera.quaternion);
+  }
+
+  /** Current camera orientation (a copy). */
+  orientation(): THREE.Quaternion {
+    return this.camera.quaternion.clone();
+  }
+
+  /** Smoothly orbits the camera to look at the target from direction `dir`, keeping the distance. */
+  viewFrom(dir: Vec3) {
+    this.cancelSnap();
+    const target = this.controls.target.clone();
+    const offset = this.camera.position.clone().sub(target);
+    const dist = offset.length();
+    const from = offset.normalize();
+    const to = new THREE.Vector3(...dir).normalize();
+    // Straight up/down is degenerate with a Z-up camera; lean slightly toward -Y so Front stays at the bottom.
+    if (Math.abs(to.z) > 0.9999) to.set(0, -1e-3, Math.sign(to.z)).normalize();
+    const full = new THREE.Quaternion().setFromUnitVectors(from, to);
+    const step = new THREE.Quaternion();
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / 250);
+      step.identity().slerp(full, 1 - (1 - t) ** 3);
+      this.camera.position.copy(from).applyQuaternion(step).multiplyScalar(dist).add(target);
+      this.controls.update();
+      this.snapRaf = t < 1 ? requestAnimationFrame(tick) : 0;
+    };
+    this.snapRaf = requestAnimationFrame(tick);
+  }
+
+  private cancelSnap() {
+    if (this.snapRaf) cancelAnimationFrame(this.snapRaf);
+    this.snapRaf = 0;
   }
 
   private resize() {
@@ -370,6 +417,7 @@ export class Viewport {
   }
 
   private onDown(e: PointerEvent) {
+    this.cancelSnap();
     if (e.button !== 0 || this.orbitHeld) return;
     const hit = this.hit(e);
     const tool = app.tool;
