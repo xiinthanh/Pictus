@@ -6,25 +6,25 @@
   import { colorBodies, mergedBody } from '$lib/core/mesher';
   import { baseName, errorText, pickSave, stripExt, withExt, writeBytes, writeText } from '$lib/platform/files';
   import { app, editor } from '$lib/state/app.svelte';
+  import {
+    DEFAULT_EXPORT_PREFS,
+    EXPORT_PREFS_KEY,
+    parseExportPrefs,
+    type ExportFormat,
+    type ExportPrefs,
+  } from './exportPrefs';
   import Modal from './Modal.svelte';
 
-  type Format = '3mf' | 'stl' | 'obj';
-  const PREFS_KEY = 'pictus.export';
-
-  function loadPrefs(): { format: Format; isMultiColor: boolean } {
+  function loadPrefs(): ExportPrefs {
     try {
-      const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
-      return {
-        format: ['3mf', 'stl', 'obj'].includes(p.format) ? p.format : '3mf',
-        isMultiColor: p.isMultiColor !== false,
-      };
+      return parseExportPrefs(localStorage.getItem(EXPORT_PREFS_KEY));
     } catch {
-      return { format: '3mf', isMultiColor: true };
+      return { ...DEFAULT_EXPORT_PREFS };
     }
   }
 
   const prefs = loadPrefs();
-  let format = $state<Format>(prefs.format);
+  let format = $state<ExportFormat>(prefs.format);
   let isMultiColor = $state(prefs.isMultiColor);
   let voxelSize = $state(editor.voxelSize);
   let isBusy = $state(false);
@@ -35,7 +35,7 @@
     [editor.grid.sx, editor.grid.sy, editor.grid.sz].map((v) => Math.round(v * voxelSize * 10) / 10).join(' × '),
   );
 
-  const FORMATS: { id: Format; label: string; note: string }[] = [
+  const FORMATS: { id: ExportFormat; label: string; note: string }[] = [
     { id: '3mf', label: '3MF', note: 'Best for slicers. Keeps each color as a separate part.' },
     { id: 'stl', label: 'STL', note: 'Works everywhere. No colors — one file per color if you choose multi-color.' },
     { id: 'obj', label: 'OBJ', note: 'Mesh with color materials (.obj + .mtl).' },
@@ -72,7 +72,7 @@
         await writeBytes(path, writeStl(bodies, voxelSize));
       }
       try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify({ format, isMultiColor }));
+        localStorage.setItem(EXPORT_PREFS_KEY, JSON.stringify({ format, isMultiColor }));
       } catch {
         /* ignore */
       }
