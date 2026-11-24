@@ -14,9 +14,9 @@ This records where the implementation stands against [PLAN.md](PLAN.md): what is
 | Type-check (`pnpm check`) | 0 errors, 0 warnings |
 | Frontend build (`pnpm build`) | Succeeds |
 | App run in Tauri (`pnpm tauri dev`) | Runs; live UI tests pass after one fix (see [Live UI testing](#live-ui-testing)) |
-| Installer (`pnpm tauri build`) | **Not yet run** |
+| Installer (`pnpm tauri build`) | Built and installed; double-clicking a `.pictus` file opens it in Pictus |
 | Slicer check of exports | **Not yet done** |
-| Git | 7 feature commits, plus the viewport fix and this doc update |
+| Git | 7 feature commits, the viewport fix, and doc updates |
 
 ## Build environment
 
@@ -34,9 +34,9 @@ Rust needs the MSVC linker from the Visual Studio Build Tools **"Desktop develop
 | M2 Core model and viewport | Done, tested live | 16³ chunked meshing, grid DDA raycast, render on demand. |
 | M3 Editing tools | Done, tested live | Place/erase/paint/pick/fill/box, X/Y/Z mirror, undo/redo, palette. Click/drag bugs fixed in `19f5338`. |
 | M4 Layer view | Done, tested live | 2D layer editor beside the 3D view; layers above the current one are hidden in 3D. |
-| M5 Files | Done, tested live | `.pictus`, `.vox` import/export, PNG import, recent files, unsaved-changes prompt. "Open with" not tested yet (needs the installer). |
+| M5 Files | Done, tested live | `.pictus`, `.vox` import/export, PNG import, recent files, unsaved-changes prompt, "open with" (double-click, tested with the installed build). |
 | M6 Export and printability | Done, tested live | STL/OBJ/3MF, multi-color, print check with fixes. Not yet opened in a slicer. |
-| M7 Polish and installer | Code done | Dark UI, app icon, NSIS + MSI targets, `.pictus` file association. Installer not built yet. |
+| M7 Polish and installer | Done | Dark UI, app icon, NSIS + MSI installers built and installed; the `.pictus` file association works. Uninstall not yet checked. |
 
 ## Architecture
 
@@ -138,11 +138,22 @@ Drags now intersect the plane of the clicked face, erase and paint drags stay on
 | `.vox` | Export, then re-import, inside the app gives an identical model |
 | Rust IPC | `write_file`/`read_file` round-trip of 70 KB of binary data to a path with a non-ASCII character |
 
+### Installer
+
+`pnpm tauri build` (2026-11-24, includes the viewport fix) produced:
+
+| File | Size |
+| --- | --- |
+| `src-tauri/target/release/bundle/nsis/Pictus_0.1.0_x64-setup.exe` | 1.5 MB |
+| `src-tauri/target/release/bundle/msi/Pictus_0.1.0_x64_en-US.msi` | 2.2 MB |
+| `src-tauri/target/release/pictus.exe` (the app itself) | 4.4 MB |
+
+Both installers are well under the ~10 MB target. The installer was run on the development laptop and installed correctly. **Double-clicking a `.pictus` file opens it in the installed Pictus**, so the file association and the startup-file command work. The installers aren't code-signed, so Windows SmartScreen warns on first run (More info → Run anyway).
+
 ### Not done yet
 
 - The native file dialogs themselves (intercepted in the tests above).
-- "Open with" / double-clicking a `.pictus` file (needs the installer).
-- `pnpm tauri build`: install, double-click a `.pictus` file, uninstall.
+- Uninstalling through Settings → Apps.
 - Opening exports in PrusaSlicer, Bambu Studio or Orca (repair warnings, parts per color, dimensions).
 - `.vox` round-trip through MagicaVoxel itself.
 - Frame rate on a laptop's integrated GPU with a full 128³ model.
@@ -163,8 +174,9 @@ Drags now intersect the plane of the clicked face, erase and paint drags stay on
 
 ## Next steps
 
-1. Run `pnpm tauri build` and test the installer, the `.pictus` file association and uninstalling.
-2. Check exports in a slicer (PrusaSlicer / Bambu Studio / Orca).
-3. Check frame rate with a full 128³ model on the laptop.
-4. Consider adding the live UI test as a repeatable script (Playwright over the WebView2 debug port).
-5. Take on the follow-ups above as needed.
+1. Try the real Open and Export dialogs once in the installed app.
+2. Check memory (target under 200 MB) and frame rate with a full 128³ model on the laptop.
+3. Check exports in a slicer (PrusaSlicer / Bambu Studio / Orca).
+4. Check that uninstalling removes Pictus cleanly.
+5. Consider adding the live UI test as a repeatable script (Playwright over the WebView2 debug port).
+6. Take on the follow-ups above as needed.
