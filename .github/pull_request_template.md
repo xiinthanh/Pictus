@@ -1,4 +1,5 @@
-<!-- PR title = the squash commit message on main. Use a conventional commit: feat: / fix: / docs: / chore: / refactor: / test: -->
+<!-- PR title appears in the merge commit on main. Use a conventional commit: feat: / fix: / docs: / chore: / refactor: / test:
+     Every branch commit lands on main too, so fold "wip"/"fix typo" commits in before review. -->
 
 ## What and why
 

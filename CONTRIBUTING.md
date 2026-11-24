@@ -44,14 +44,16 @@ We use **GitHub Flow**: `main` is always releasable, and all changes arrive thro
    git switch -c feat/palette-delete
    ```
    Prefixes: `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`.
-3. **Commit as often as you like.** Branch commits are squashed on merge, so they don't need to be perfect.
-4. **Open a pull request early.** A draft is fine. Fill in the template and link the issue (`Closes #12`).
-5. **Give the PR a conventional-commit title.** It becomes the commit message on `main`:
+3. **Write meaningful commits.** PRs are merged with a merge commit, so **every commit on your branch ends up in `main`'s history**. Use conventional-commit messages:
    - `feat: delete unused palette colors`
    - `fix: box tool ignores height in layer view`
    - `docs: explain .pictus format`
+
+   Before asking for review, tidy up `wip` or `fix typo` commits by folding them into the commit they belong to (`git commit --fixup <hash>`, then `git rebase -i --autosquash origin/main`).
+4. **Open a pull request early.** A draft is fine. Fill in the template and link the issue (`Closes #12`).
+5. **Give the PR a conventional-commit title** that summarizes the whole change. It appears in the merge commit on `main`.
 6. **CI must pass and one teammate must approve.** Respond to every review comment, either with a change or with a reply.
-7. **The author squash-merges** after approval. The branch is deleted automatically.
+7. **The author merges** after approval. The branch is deleted automatically.
 
 Keep pull requests **small and focused**: one feature or fix each, ideally under ~400 changed lines. Small PRs get reviewed faster and conflict less.
 
