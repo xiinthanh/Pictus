@@ -253,3 +253,40 @@ Rust: unit test cho `authorize` (thiếu token, sai token, có Origin, đúng).
 - **Cửa sổ thu nhỏ:** WebView có thể chạy chậm lại hoặc không vẽ, nên `snapshot` có thể trả về ảnh trống. Khi đó báo lỗi rõ ràng cho AI.
 - **Sửa bảng màu khi mô hình 128³** sẽ dựng lại toàn bộ (hạn chế đã biết), `set_color` có thể chậm khoảng 0,2 giây mỗi lần.
 - **Sửa bảng màu không hoàn tác được** (hạn chế sẵn có của `Editor`). Ghi rõ điều này trong mô tả công cụ `set_color`.
+
+---
+
+## Kết quả thực hiện (24/11/2026)
+
+Cả 7 mốc M0–M6 đã xong trên nhánh `feat/mcp` (chưa gộp vào `master`, chưa push). Claude Code đã dùng được thật trên app: đọc mô hình, vẽ, hoàn tác, chụp ảnh, kiểm tra in và tự sửa.
+
+### Khác với kế hoạch
+
+| Kế hoạch | Thực tế | Lý do |
+|---|---|---|
+| Hộp thoại AI (công tắc, cổng, token, nút sao chép) và chấm "AI on" ở thanh trạng thái | **Một nút "Connect AI"** trên thanh menu (bật thì nút đổi thành "AI on"). Lần đầu bấm, app chép lệnh `claude mcp add --scope user …` vào clipboard; app nhớ trạng thái để tự bật khi mở | Bạn chỉ cần: mở Pictus → mở Claude Code → chat. Cổng cố định 47821 |
+| Một file `tools.ts` khoảng 260 dòng | Tách thành `tools.ts`, `editTools.ts`, `inspectTools.ts`, `args.ts`, cộng thêm `settings.ts` | Giữ mỗi file và mỗi hàm gọn (AGENTS.md 3.4) |
+| Kết quả `tools/list` như đặc tả cũ | Thêm `ttlMs` và `cacheScope` vào `server/discover` và `tools/list` | Claude Code bản mới từ chối nếu thiếu |
+| `snapshot(frame?)` | `snapshot(view)`, trong đó `overview` dùng camera riêng, ẩn khung con trỏ và mặt cắt, không xoay camera của bạn; `current` là đúng thứ bạn đang thấy | AI tự nhìn mà không làm xáo trộn màn hình của bạn |
+| Từ chối khi đang vẽ | Từ chối cả khi đang có hộp thoại, hộp hỏi, chọn file hoặc đang lưu (`app.busyTasks`) | Tránh AI sửa đúng lúc file đang được lưu hoặc mở |
+| Công cụ `undo` gỡ bước gần nhất | Chỉ gỡ **bước của AI**; nếu bước trên cùng là của bạn thì từ chối | Không bao giờ xoá nhầm nét vẽ của bạn |
+| — | Sau khi AI sửa, phần tô sáng của Print check bị xoá; ảnh chụp ở chế độ lớp kèm ghi chú "lớp trên bị ẩn" | Tránh để AI hiểu sai ảnh chụp |
+
+Ngoài ra, trong quá trình làm đã thêm ESLint + Prettier, `AGENTS.md`, và đổi tên các biến boolean theo quy tắc `is/has/should`.
+
+### Kết quả các rủi ro
+
+- **Phiên bản giao thức:** hỗ trợ cả đời mới 2026-07-28 lẫn `initialize` đời cũ (2025-03-26 đến 2025-11-25). Đã chạy được với Claude Code.
+- **Cửa sổ thu nhỏ:** đã thử, **không xảy ra lỗi**, vẫn chụp được ảnh đầy đủ. Nếu khung 3D không hiển thị (chưa dựng xong hoặc bị ẩn), AI nhận lời báo lỗi rõ ràng thay vì ảnh trống.
+- **Claude Desktop:** không làm. Bạn chốt chỉ cần Claude Code. Claude Desktop sẽ cần một cầu nối bên thứ ba như `mcp-remote`.
+- **Sửa bảng màu không hoàn tác được:** đúng như dự kiến, đã ghi trong mô tả công cụ `set_color` và trong hướng dẫn gửi cho AI.
+
+### Kiểm chứng
+
+- `pnpm test` 175/175, `pnpm lint`, `pnpm format:check`, `pnpm check`, `pnpm build`, `cargo test` 10/10: đều đạt.
+- Trên app thật: bộ thử bằng curl (200 / 202 / 401 / 403 / 404 / 405 / 413 / 400, gửi song song); Claude Code vẽ cây nấm, undo, chụp ảnh, kiểm tra in và tự sửa; Ctrl+Z gỡ bước của AI; AI bị từ chối khi đang mở hộp hỏi hoặc Save As.
+
+### Chưa kiểm
+
+- Nút **Connect AI** trên **bản cài đặt**: lần đầu đăng ký và tự bật lại khi mở app.
+- Nút **Show** của bảng Print check tự tắt khi AI thay phần tô sáng (logic đã có test, chưa bấm thử).

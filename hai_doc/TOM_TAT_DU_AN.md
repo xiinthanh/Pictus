@@ -10,6 +10,7 @@ Phần mềm Windows nhỏ gọn để **dựng mô hình 3D dạng "pixel khố
 - Nhập ảnh pixel art (PNG) → tự đắp nổi thành móc khoá / bảng tên.
 - Xuất **3MF** (mỗi màu một phần, dùng cho máy in nhiều màu), **STL**, **OBJ**.
 - Có chức năng **kiểm tra trước khi in**: tìm phần rời, chỗ chỉ chạm cạnh/góc và tự sửa.
+- **Cho AI (Claude Code) vẽ giúp** qua MCP: bấm nút Connect AI, AI vẽ đến đâu thấy ngay đến đó (nhánh `feat/mcp`).
 
 Mục tiêu (GOAL.md): chạy mượt trên laptop thường, dễ dùng, chỉ giữ tính năng cần thiết.
 
@@ -17,13 +18,13 @@ Mục tiêu (GOAL.md): chạy mượt trên laptop thường, dễ dùng, chỉ 
 
 | Phần | Công nghệ |
 | --- | --- |
-| Vỏ ứng dụng desktop | **Tauri 2** (Rust) — chỉ đọc/ghi file và nhận file khi mở bằng double-click |
+| Vỏ ứng dụng desktop | **Tauri 2** (Rust) — đọc/ghi file, nhận file khi mở bằng double-click, và trạm trung chuyển MCP (`tiny_http`, chỉ nghe 127.0.0.1) |
 | Giao diện | **Svelte 5** + SvelteKit (chế độ SPA) + TypeScript + Vite |
 | Hiển thị 3D | **Three.js** |
 | Nén / zip | fflate |
-| Kiểm thử | Vitest |
+| Kiểm thử, chất lượng code | Vitest, ESLint, Prettier; `cargo test` cho Rust |
 
-Gần như toàn bộ logic viết bằng TypeScript; Rust chỉ ~70 dòng.
+Gần như toàn bộ logic viết bằng TypeScript; Rust khoảng 430 dòng (trong đó ~350 dòng là trạm trung chuyển MCP, kể cả test).
 
 ## 3. Cấu trúc thư mục
 
@@ -51,9 +52,10 @@ Pictus/
 │     ├─ actions.ts            Mới / Mở / Lưu / Lưu thành / nhập-xuất .vox
 │     ├─ state/app.svelte.ts   trạng thái ứng dụng (công cụ, màu, lớp, file đang mở…)
 │     ├─ platform/files.ts     gọi hộp thoại và lệnh đọc/ghi file của Rust
+│     ├─ mcp/                  giao thức MCP và các công cụ cho AI; bridge.ts nối với app
 │     └─ ui/                   các thành phần giao diện (thanh menu, công cụ, hộp thoại…)
-├─ src-tauri/                  vỏ Rust, cấu hình cửa sổ, bộ cài, icon
-└─ tests/                      kiểm thử cho core/ (core, io, mesh, perf)
+├─ src-tauri/                  vỏ Rust (src/mcp.rs = trạm MCP), cấu hình cửa sổ, bộ cài, icon
+└─ tests/                      kiểm thử cho core/ và mcp/
 ```
 
 **Luồng dữ liệu:** người dùng thao tác (ui / viewport) → `editing.ts` → `Editor` sửa lưới và ghi lịch sử → phát sự kiện → khung 3D vẽ lại đúng các cụm bị đổi, giao diện cập nhật.
@@ -77,6 +79,8 @@ Kèm đối xứng X/Y/Z, Ctrl+Z / Ctrl+Y.
 
 **Kiểm tra in:** đếm phần rời (nối theo mặt), tìm chỗ chỉ chạm cạnh/góc, bấm để tô sáng, tự sửa bằng cách lấp ô trống với màu lân cận (hoàn tác được).
 
+**AI vẽ giúp (Claude Code):** bấm **Connect AI** trên thanh menu. Lần đầu, dán lệnh app đã chép sẵn vào terminal (chỉ một lần). Sau đó mở Claude Code và chat, ví dụ "vẽ cây nấm đỏ trắng cao 12 khối rồi kiểm tra in". AI có 10 công cụ (đọc mô hình, đọc một lớp, vẽ ô, tô hộp, đổi màu, mô hình mới, hoàn tác, kiểm tra in, sửa chỗ chạm mỏng, chụp ảnh khung 3D). Mỗi lệnh của AI là một bước Ctrl+Z; AI không mở, lưu hay xuất file. Chi tiết: `hai_doc/KE_HOACH_A2_MCP.md`.
+
 Phím tắt khác: Ctrl+N mới, Ctrl+O mở, Ctrl+S lưu, Ctrl+Shift+S lưu thành, Ctrl+E xuất, Ctrl+I nhập ảnh.
 
 ## 5. Điểm kỹ thuật đáng chú ý
@@ -92,15 +96,16 @@ Phím tắt khác: Ctrl+N mới, Ctrl+O mở, Ctrl+S lưu, Ctrl+Shift+S lưu th�
 | Hạng mục | Trạng thái |
 | --- | --- |
 | Mã cho 7 mốc M1–M7 | Đã viết xong |
-| Git | 5 commit trên nhánh `master` (core → shell → UI → docs) |
-| Unit test | 38/38 đạt (chạy lại 24/11/2026) |
+| Git | Nhánh `master` + nhánh `feat/mcp` (tính năng AI/MCP), chưa push |
+| Unit test | 175/175 đạt; lint, format đạt (24/11/2026) |
 | Kiểm tra kiểu (`pnpm check`) | 0 lỗi, 0 cảnh báo (24/11/2026) |
 | Hiệu năng (mô hình 128³ dày đặc) | Dựng lại toàn bộ khung 3D ~0,2 s; lưới xuất ~2,3–2,9 s; kiểm tra in ~0,24 s |
-| Biên dịch Rust (`cargo build`, `cargo test`) | Đạt (24/11/2026), dùng MSVC 14.51 của Visual Studio Community 2026 |
-| Chạy app / bộ cài | Chưa làm |
+| Biên dịch Rust (`cargo build`, `cargo test`) | Đạt, 10/10 test (24/11/2026), dùng MSVC 14.51 của Visual Studio Community 2026 |
+| Chạy app (`pnpm tauri dev`) | Chạy được; đã dùng nhiều khi làm MCP, chưa thử tay toàn bộ |
+| Bộ cài (`pnpm tauri build`) | Chưa làm |
 | Thử file xuất trong phần mềm cắt lớp | Chưa làm |
 
-> Lưu ý: IMPLEMENTATION_DOC.md ghi "nothing committed" — thông tin này **đã cũ**, repo hiện đã có commit.
+> IMPLEMENTATION_DOC.md đã được cập nhật lại cho đúng tình trạng (24/11/2026).
 
 ## 7. Vấn đề phát hiện khi đọc hôm nay
 
@@ -123,4 +128,5 @@ Phím tắt khác: Ctrl+N mới, Ctrl+O mở, Ctrl+S lưu, Ctrl+Shift+S lưu th�
 2. Chạy `pnpm tauri dev` và thử tay theo danh sách trong PLAN.md.
 3. `pnpm tauri build` → thử bộ cài, double-click file `.pictus`, gỡ cài đặt.
 4. Mở file xuất trong PrusaSlicer / Bambu / Orca để kiểm tra.
-5. Cập nhật lại IMPLEMENTATION_DOC.md cho đúng tình trạng git.
+5. ~~Cập nhật lại IMPLEMENTATION_DOC.md cho đúng tình trạng git~~ — xong ngày 24/11/2026.
+6. Thử nút Connect AI trên bản cài đặt; quyết định gộp nhánh `feat/mcp` vào `master`.
