@@ -34,7 +34,7 @@ function loadRecent(): string[] {
 export interface ConfirmRequest {
   title: string;
   message: string;
-  buttons: { id: string; label: string; primary?: boolean }[];
+  buttons: { id: string; label: string; isPrimary?: boolean }[];
   resolve: (id: string) => void;
 }
 
@@ -43,19 +43,19 @@ class AppState {
   boxMode = $state<BoxMode>('add');
   boxHeight = $state(1);
   color = $state(1);
-  mirror = $state<Mirror>({ x: false, y: false, z: false });
-  layerMode = $state(false);
+  mirror = $state<Mirror>({ isX: false, isY: false, isZ: false });
+  isLayerMode = $state(false);
   layer = $state(0);
 
   filePath = $state<string | null>(null);
   docName = $state('Untitled');
-  dirty = $state(false);
+  isDirty = $state(false);
   /** Bumped on every model change so derived UI (counts, palette) refreshes. */
   rev = $state(0);
   hover = $state<Vec3 | null>(null);
   status = $state('');
   dialog = $state<DialogId>(null);
-  checkOpen = $state(false);
+  isCheckOpen = $state(false);
   /** Cells to highlight in the viewport (print check). */
   highlight = $state<Vec3[]>([]);
   confirm = $state<ConfirmRequest | null>(null);
@@ -106,7 +106,7 @@ export const editor = new Editor();
 
 editor.on((e) => {
   app.rev++;
-  if (e.kind !== 'reset') app.dirty = true;
+  if (e.kind !== 'reset') app.isDirty = true;
   if (e.kind === 'reset') {
     app.highlight = [];
     app.layer = Math.min(app.layer, editor.grid.sz - 1);

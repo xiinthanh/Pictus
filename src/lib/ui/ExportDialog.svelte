@@ -11,20 +11,23 @@
   type Format = '3mf' | 'stl' | 'obj';
   const PREFS_KEY = 'pictus.export';
 
-  function loadPrefs(): { format: Format; multi: boolean } {
+  function loadPrefs(): { format: Format; isMultiColor: boolean } {
     try {
       const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
-      return { format: ['3mf', 'stl', 'obj'].includes(p.format) ? p.format : '3mf', multi: p.multi !== false };
+      return {
+        format: ['3mf', 'stl', 'obj'].includes(p.format) ? p.format : '3mf',
+        isMultiColor: p.isMultiColor !== false,
+      };
     } catch {
-      return { format: '3mf', multi: true };
+      return { format: '3mf', isMultiColor: true };
     }
   }
 
   const prefs = loadPrefs();
   let format = $state<Format>(prefs.format);
-  let multi = $state(prefs.multi);
+  let isMultiColor = $state(prefs.isMultiColor);
   let voxelSize = $state(editor.voxelSize);
-  let busy = $state(false);
+  let isBusy = $state(false);
 
   const report = analyze(editor.grid);
   const colors = new Set(editor.grid.data).size - (editor.grid.data.includes(0) ? 1 : 0);
@@ -44,12 +47,12 @@
     const p = await pickSave([{ name: format.toUpperCase(), extensions: [format] }], `${app.docName}${ext}`);
     if (!p) return;
     const path = withExt(p, ext);
-    busy = true;
+    isBusy = true;
     // Let the "Exporting…" state paint before the synchronous meshing work.
     await new Promise((r) => setTimeout(r, 30));
     try {
       editor.setVoxelSize(voxelSize);
-      const bodies = multi && colors > 1 ? colorBodies(editor.grid) : [mergedBody(editor.grid)];
+      const bodies = isMultiColor && colors > 1 ? colorBodies(editor.grid) : [mergedBody(editor.grid)];
       const name = stripExt(baseName(path));
       let written = baseName(path);
       if (format === '3mf') {
@@ -69,26 +72,26 @@
         await writeBytes(path, writeStl(bodies, voxelSize));
       }
       try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify({ format, multi }));
+        localStorage.setItem(PREFS_KEY, JSON.stringify({ format, isMultiColor }));
       } catch {
         /* ignore */
       }
       app.flash(`Exported ${written}`, 6000);
       app.dialog = null;
     } catch (e) {
-      await app.ask('Export failed', errorText(e), [{ id: 'ok', label: 'OK', primary: true }]);
+      await app.ask('Export failed', errorText(e), [{ id: 'ok', label: 'OK', isPrimary: true }]);
     } finally {
-      busy = false;
+      isBusy = false;
     }
   }
 
   function openCheck() {
     app.dialog = null;
-    app.checkOpen = true;
+    app.isCheckOpen = true;
   }
 </script>
 
-<Modal title="Export for 3D printing" onclose={() => !busy && (app.dialog = null)} width={460}>
+<Modal title="Export for 3D printing" onclose={() => !isBusy && (app.dialog = null)} width={460}>
   {#if report.voxels === 0}
     <p class="warn">The model is empty — add some voxels first.</p>
   {:else}
@@ -106,7 +109,7 @@
 
     {#if colors > 1}
       <label class="row check">
-        <input type="checkbox" bind:checked={multi} />
+        <input type="checkbox" bind:checked={isMultiColor} />
         <span>Multi-color: export each of the {colors} colors as its own part</span>
       </label>
     {/if}
@@ -132,9 +135,9 @@
   {/if}
 
   {#snippet footer()}
-    <button onclick={() => (app.dialog = null)} disabled={busy}>Cancel</button>
-    <button class="primary" disabled={busy || report.voxels === 0 || !(voxelSize > 0)} onclick={doExport}>
-      {busy ? 'Exporting…' : 'Export…'}
+    <button onclick={() => (app.dialog = null)} disabled={isBusy}>Cancel</button>
+    <button class="primary" disabled={isBusy || report.voxels === 0 || !(voxelSize > 0)} onclick={doExport}>
+      {isBusy ? 'Exporting…' : 'Export…'}
     </button>
   {/snippet}
 </Modal>

@@ -71,7 +71,7 @@ export function readVox(bytes: Uint8Array): VoxImport {
       y = bytes[p + 1],
       z = bytes[p + 2],
       c = bytes[p + 3];
-    if (c === 0 || !grid.inBounds(x, y, z)) continue;
+    if (c === 0 || !grid.isInBounds(x, y, z)) continue;
     let mapped = remap.get(c);
     if (mapped === undefined) {
       mapped = palette.length;

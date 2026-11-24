@@ -32,7 +32,7 @@ type Pending = Arc<Mutex<HashMap<u64, Sender<(u16, String)>>>>;
 
 struct Run {
     server: Arc<Server>,
-    stop: Arc<AtomicBool>,
+    should_stop: Arc<AtomicBool>,
     thread: JoinHandle<()>,
 }
 
@@ -70,13 +70,13 @@ pub fn mcp_start(app: AppHandle, state: State<McpState>, port: u16, token: Strin
     }
     stop(&state)?;
     let server = Arc::new(bind(port)?);
-    let stop_flag = Arc::new(AtomicBool::new(false));
+    let should_stop = Arc::new(AtomicBool::new(false));
     let thread = {
-        let (server, stop_flag) = (server.clone(), stop_flag.clone());
+        let (server, should_stop) = (server.clone(), should_stop.clone());
         let (pending, next_id) = (state.pending.clone(), state.next_id.clone());
-        thread::spawn(move || serve(app, server, token, stop_flag, pending, next_id))
+        thread::spawn(move || serve(app, server, token, should_stop, pending, next_id))
     };
-    *state.run.lock().unwrap() = Some(Run { server, stop: stop_flag, thread });
+    *state.run.lock().unwrap() = Some(Run { server, should_stop, thread });
     Ok(())
 }
 
@@ -115,20 +115,20 @@ fn stop(state: &McpState) -> Result<(), String> {
     let Some(run) = state.run.lock().unwrap().take() else {
         return Ok(());
     };
-    run.stop.store(true, Ordering::SeqCst);
+    run.should_stop.store(true, Ordering::SeqCst);
     run.server.unblock();
     state.pending.lock().unwrap().clear();
     // Returns within one POLL interval: the pending answer it may wait on was just dropped.
     run.thread.join().map_err(|_| "The AI connection thread crashed".to_string())
 }
 
-fn serve(app: AppHandle, server: Arc<Server>, token: String, stop: Arc<AtomicBool>, pending: Pending, next_id: Arc<AtomicU64>) {
+fn serve(app: AppHandle, server: Arc<Server>, token: String, should_stop: Arc<AtomicBool>, pending: Pending, next_id: Arc<AtomicU64>) {
     loop {
         let mut req = match server.recv() {
             Ok(req) => req,
             Err(e) => {
                 // `unblock()` from stop() also lands here; only an unexpected end is reported.
-                if !stop.load(Ordering::SeqCst) {
+                if !should_stop.load(Ordering::SeqCst) {
                     let error = format!("the server stopped accepting connections: {e}");
                     if let Err(emit_err) = app.emit_to("main", "mcp-stopped", McpStopped { error }) {
                         eprintln!("Pictus MCP: server stopped ({e}) and the window could not be told: {emit_err}");
@@ -137,10 +137,10 @@ fn serve(app: AppHandle, server: Arc<Server>, token: String, stop: Arc<AtomicBoo
                 return;
             }
         };
-        let response = if stop.load(Ordering::SeqCst) {
+        let response = if should_stop.load(Ordering::SeqCst) {
             text(503, "Pictus AI connection is off")
         } else {
-            handle(&app, &mut req, &token, &stop, &pending, &next_id)
+            handle(&app, &mut req, &token, &should_stop, &pending, &next_id)
         };
         if let Err(e) = req.respond(response) {
             eprintln!("Pictus MCP: could not send a response (client disconnected?): {e}");
@@ -152,7 +152,7 @@ fn handle(
     app: &AppHandle,
     req: &mut Request,
     token: &str,
-    stop: &AtomicBool,
+    should_stop: &AtomicBool,
     pending: &Pending,
     next_id: &AtomicU64,
 ) -> Response<std::io::Cursor<Vec<u8>>> {
@@ -192,7 +192,7 @@ fn handle(
     let answer = loop {
         match rx.recv_timeout(POLL) {
             Ok(a) => break Some(a),
-            Err(RecvTimeoutError::Timeout) if !stop.load(Ordering::SeqCst) && started.elapsed() < ANSWER_TIMEOUT => {}
+            Err(RecvTimeoutError::Timeout) if !should_stop.load(Ordering::SeqCst) && started.elapsed() < ANSWER_TIMEOUT => {}
             Err(_) => break None,
         }
     };

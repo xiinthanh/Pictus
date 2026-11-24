@@ -88,11 +88,11 @@
     ctx.strokeStyle = 'rgba(179,136,255,0.7)';
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    if (app.mirror.x) {
+    if (app.mirror.isX) {
       ctx.moveTo(ox + (cs * g.sx) / 2, oy);
       ctx.lineTo(ox + (cs * g.sx) / 2, oy + cs * g.sy);
     }
-    if (app.mirror.y) {
+    if (app.mirror.isY) {
       ctx.moveTo(ox, oy + (cs * g.sy) / 2);
       ctx.lineTo(ox + cs * g.sx, oy + (cs * g.sy) / 2);
     }

@@ -45,7 +45,7 @@ Khi đối chiếu đặc tả MCP hiện hành, tôi phát hiện bản **2026-
 7. `src/lib/core/` vẫn không phụ thuộc giao diện. `src/lib/mcp/tools.ts` và `protocol.ts` **không import** `app.svelte.ts` mà nhận mọi thứ qua tham số `ctx`. *Mục đích:* test được bằng vitest mà không cần Svelte.
 8. Mọi thay đổi mô hình đều đi qua `Editor` (`src/lib/core/editor.ts`).
 9. **Mỗi lần AI gọi một công cụ = đúng một bước hoàn tác**: bọc trong `editor.beginStroke()` / `editor.endStroke()`.
-10. Người dùng đang kéo chuột vẽ (`editor.inStroke`) thì công cụ sửa trả lỗi "User is drawing, retry shortly". Không chạy chen vào.
+10. Người dùng đang kéo chuột vẽ (`editor.isInStroke`) thì công cụ sửa trả lỗi "User is drawing, retry shortly". Không chạy chen vào.
 11. Lỗi của công cụ trả về dạng `isError: true` kèm lời giải thích để AI tự sửa. Chỉ lỗi giao thức mới dùng lỗi JSON-RPC.
 12. Kiểm tra mọi tham số: số nguyên, trong giới hạn lưới, màu tồn tại. Mỗi lần gọi tối đa 20.000 voxel.
 13. Mô tả công cụ viết bằng tiếng Anh (để AI hiểu chính xác). Giao diện cũng tiếng Anh, giống phần còn lại của app.
@@ -66,7 +66,7 @@ Khi đối chiếu đặc tả MCP hiện hành, tôi phát hiện bản **2026-
 | `src/lib/render/viewport.ts` | sửa | +15 | Thêm hàm `snapshot()` |
 | `src/lib/ui/ViewportView.svelte` | sửa | +2 | Đăng ký viewport cho `bridge` |
 | `src/lib/ui/AiDialog.svelte` | **mới** | ~110 | Bật/tắt, cổng, token, nút sao chép lệnh kết nối |
-| `src/lib/state/app.svelte.ts` | sửa | +3 | `DialogId` thêm `'ai'`, thêm `mcpOn` |
+| `src/lib/state/app.svelte.ts` | sửa | +3 | `DialogId` thêm `'ai'`, thêm `isMcpOn` |
 | `src/lib/ui/MenuBar.svelte` | sửa | +3 | Nút "AI…" |
 | `src/lib/ui/StatusBar.svelte` | sửa | +3 | Chấm báo "AI on" |
 | `src/routes/+page.svelte` | sửa | +2 | Hiện `AiDialog`, tự bật lại nếu lần trước đang bật |
@@ -135,7 +135,7 @@ export async function handleMessage(raw: string, tools: Tool[], ctx: ToolCtx): P
 ```ts
 export interface ToolCtx {
   editor: Editor;                                   // src/lib/core/editor.ts
-  info(): { name: string; dirty: boolean; layer: number; color: number };
+  info(): { name: string; isDirty: boolean; layer: number; color: number };
   newModel(sx: number, sy: number, sz: number): void;   // gọi newModel() trong src/lib/actions.ts
   highlight(cells: Vec3[]): void;                   // gán app.highlight
   snapshot(frame: boolean): string | null;          // base64 PNG từ viewport
@@ -144,7 +144,7 @@ export interface ToolCtx {
 export interface Tool { name; description; inputSchema; run(args, ctx): Promise<Content[]> }
 export const TOOLS: Tool[]
 ```
-Có hàm phụ `edit(ctx, fn)` dùng chung cho các công cụ sửa: kiểm tra `inStroke` (quy tắc 10), mở stroke, chạy `fn`, rồi đóng stroke trong `finally`.
+Có hàm phụ `edit(ctx, fn)` dùng chung cho các công cụ sửa: kiểm tra `isInStroke` (quy tắc 10), mở stroke, chạy `fn`, rồi đóng stroke trong `finally`.
 
 | # | Công cụ | Tham số | Dùng lại code có sẵn |
 |---|---|---|---|
@@ -162,7 +162,7 @@ Có hàm phụ `edit(ctx, fn)` dùng chung cho các công cụ sửa: kiểm tra
 ### 5. `src/lib/mcp/bridge.ts` (mới)
 
 - `startMcp(port, token)`: gọi `invoke('mcp_start')`, rồi `listen('mcp-request', …)`. Mỗi sự kiện chạy `handleMessage` rồi `invoke('mcp_respond', {id, body: out ?? ''})`.
-- `stopMcp()`: hủy nghe sự kiện, gọi `invoke('mcp_stop')`, đặt `app.mcpOn = false`.
+- `stopMcp()`: hủy nghe sự kiện, gọi `invoke('mcp_stop')`, đặt `app.isMcpOn = false`.
 - Cài đặt lưu trong `localStorage['pictus.mcp'] = {enabled, port, token}`, bọc trong try/catch giống `addRecent` ở `src/lib/state/app.svelte.ts`. Cổng mặc định 47821.
 - `registerViewport(v)` / biến `ctx`: nối `ToolCtx` với `app`, `editor` và viewport thật.
 
@@ -186,7 +186,7 @@ Trong `ViewportView.svelte`, ngay sau `view = new Viewport(el)` thêm `registerV
   - Ô lệnh kèm nút Copy: `claude mcp add --transport http pictus http://127.0.0.1:47821/mcp --header "Authorization: Bearer <token>"`.
   - Một dòng cảnh báo: "Any program that has this token can edit the open model."
 - **`MenuBar.svelte`**: nút "AI…" đặt cạnh nút Print check, gán `app.dialog = 'ai'`.
-- **`StatusBar.svelte`**: khi `app.mcpOn` thì hiện chấm xanh "AI on".
+- **`StatusBar.svelte`**: khi `app.isMcpOn` thì hiện chấm xanh "AI on".
 - **`+page.svelte`**: thêm `{#if app.dialog === 'ai'}<AiDialog />{/if}`. Trong `onMount`, nếu cài đặt `enabled` thì gọi `startMcp`.
 
 ### 8. `tests/mcp.test.ts` (mới)
@@ -195,8 +195,8 @@ Dùng `Editor` thật cùng một `ctx` giả. Các trường hợp cần test:
 - Giao thức: `initialize`, `tools/list`, thông báo trả `null`, JSON lỗi, phương thức lạ.
 - `set_voxels` / `fill_box` thay đổi đúng ô và gộp thành **một** bước hoàn tác.
 - Tọa độ ngoài lưới hoặc màu không tồn tại thì trả `isError`.
-- Đang `inStroke` thì từ chối.
-- `new_model` bị từ chối khi `dirty`.
+- Đang `isInStroke` thì từ chối.
+- `new_model` bị từ chối khi `isDirty`.
 - `fix_thin_contacts` hết chỗ chạm cạnh/góc trên mẫu thử sẵn trong `tests/helpers.ts` / `mesh.test.ts`.
 
 Rust: unit test cho `authorize` (thiếu token, sai token, có Origin, đúng).

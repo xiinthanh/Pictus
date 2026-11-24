@@ -1,11 +1,11 @@
 <script lang="ts">
+  import { MIRROR_AXES } from '$lib/core/tools';
   import { app, editor, TOOLS } from '$lib/state/app.svelte';
 
   const tool = $derived(TOOLS.find((t) => t.id === app.tool));
   const mirrors = $derived(
-    ['x', 'y', 'z']
-      .filter((a) => app.mirror[a as 'x'])
-      .map((a) => a.toUpperCase())
+    MIRROR_AXES.filter(([, key]) => app.mirror[key])
+      .map(([axis]) => axis)
       .join(''),
   );
   const voxelSize = $derived((app.rev, editor.voxelSize));
@@ -19,7 +19,7 @@
   <span class="spacer"></span>
   {#if app.status}<span class="status">{app.status}</span>{/if}
   {#if mirrors}<span class="tag">Mirror {mirrors}</span>{/if}
-  {#if app.layerMode}<span class="tag">Layer {app.layer + 1}</span>{/if}
+  {#if app.isLayerMode}<span class="tag">Layer {app.layer + 1}</span>{/if}
   <span class="muted">1 voxel = {voxelSize} mm</span>
 </footer>
 

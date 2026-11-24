@@ -188,9 +188,9 @@ export function buildBody(grid: VoxelGrid, isSolid: (v: number) => boolean, colo
             c[a] = s;
             c[u] = i;
             c[v] = j;
-            const inside = solidAt(c[0], c[1], c[2]);
+            const isInside = solidAt(c[0], c[1], c[2]);
             c[a] = s + dir;
-            mask[i + j * su] = inside && !solidAt(c[0], c[1], c[2]) ? 1 : 0;
+            mask[i + j * su] = isInside && !solidAt(c[0], c[1], c[2]) ? 1 : 0;
           }
         }
         const plane = dir > 0 ? s + 1 : s;

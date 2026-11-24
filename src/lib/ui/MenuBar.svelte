@@ -65,8 +65,8 @@
   <button class="flat icon" title="Redo (Ctrl+Y)" disabled={!canRedo} onclick={redo}><Icon name="redo" /></button>
   <div class="divider"></div>
   <button
-    class:active={app.checkOpen}
-    onclick={() => (app.checkOpen = !app.checkOpen)}
+    class:active={app.isCheckOpen}
+    onclick={() => (app.isCheckOpen = !app.isCheckOpen)}
     title="Check the model for printing problems"
   >
     <span class="row"><Icon name="check" size={16} /> Print check</span>

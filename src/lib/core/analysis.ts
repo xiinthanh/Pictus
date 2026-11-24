@@ -90,7 +90,7 @@ export function fixThinContacts(grid: VoxelGrid, maxPasses = 30): FixResult {
         const cx = vx - 1 + (b & 1),
           cy = vy - 1 + ((b >> 1) & 1),
           cz = vz - 1 + ((b >> 2) & 1);
-        if (!g.inBounds(cx, cy, cz)) continue;
+        if (!g.isInBounds(cx, cy, cz)) continue;
         const m2 = mask | (1 << b);
         let solidNeighbours = 0;
         for (const bit of [1, 2, 4]) if ((mask >> (b ^ bit)) & 1) solidNeighbours++;

@@ -46,7 +46,7 @@
     if (!source) return null;
     const { w, h } = fitSize(source.w, source.h, opts);
     const rgba = w === source.w && h === source.h ? source.rgba : resizeNearest(source.rgba, source.w, source.h, w, h);
-    return { w, h, rgba, scaled: w !== source.w || h !== source.h };
+    return { w, h, rgba, isScaled: w !== source.w || h !== source.h };
   });
 
   const result = $derived.by((): { model: Model | null; error: string } => {
@@ -108,7 +108,7 @@
           </label>
           <label class="row">Border <input type="number" min="0" max="16" bind:value={opts.margin} /> voxels</label>
         {/if}
-        {#if opts.plateThickness > 0 || opts.keyring}
+        {#if opts.plateThickness > 0 || opts.hasKeyring}
           <label class="row">
             Plate color
             <input
@@ -118,10 +118,10 @@
             />
           </label>
         {/if}
-        <label class="row check"><input type="checkbox" bind:checked={opts.keyring} /> Add keyring loop</label>
+        <label class="row check"><input type="checkbox" bind:checked={opts.hasKeyring} /> Add keyring loop</label>
       </div>
     </div>
-    {#if fitted.scaled}<p class="note">
+    {#if fitted.isScaled}<p class="note">
         The image was scaled down to {fitted.w}×{fitted.h} px to fit the 128-voxel limit.
       </p>{/if}
     {#if result.model}

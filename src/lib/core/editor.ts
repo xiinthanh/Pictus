@@ -43,7 +43,7 @@ export class Editor {
     for (const fn of this.listeners) fn(e);
   }
 
-  get inStroke(): boolean {
+  get isInStroke(): boolean {
     return this.stroke !== null;
   }
 
@@ -54,8 +54,8 @@ export class Editor {
 
   /** Apply [index, value] pairs immediately. Outside a stroke each call is its own undo step. */
   apply(cells: Iterable<readonly [number, number]>): number {
-    const own = !this.stroke;
-    if (own) this.beginStroke();
+    const isOwnStroke = !this.stroke;
+    if (isOwnStroke) this.beginStroke();
     const stroke = this.stroke!;
     const data = this.grid.data;
     const changed: number[] = [];
@@ -67,7 +67,7 @@ export class Editor {
       changed.push(i);
     }
     if (changed.length) this.emit({ kind: 'cells', idx: changed });
-    if (own) this.endStroke();
+    if (isOwnStroke) this.endStroke();
     return changed.length;
   }
 

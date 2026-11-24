@@ -11,7 +11,7 @@ export interface ImageOptions {
   /** Border around the art, in voxels. */
   margin: number;
   plateColor: number;
-  keyring: boolean;
+  hasKeyring: boolean;
 }
 
 export const DEFAULT_IMAGE_OPTIONS: ImageOptions = {
@@ -20,7 +20,7 @@ export const DEFAULT_IMAGE_OPTIONS: ImageOptions = {
   plateShape: 'outline',
   margin: 1,
   plateColor: 0x212121,
-  keyring: false,
+  hasKeyring: false,
 };
 
 const RING_OUTER = 3.2;
@@ -88,7 +88,7 @@ export function quantize(counts: Map<number, number>, max: number): Map<number, 
 /** Largest size (keeping aspect) at which an image fits the grid with the given options. */
 export function fitSize(w: number, h: number, o: ImageOptions): { w: number; h: number } {
   const extra = 2 * o.margin;
-  const ringRows = o.keyring ? Math.ceil(RING_OUTER * 2) : 0;
+  const ringRows = o.hasKeyring ? Math.ceil(RING_OUTER * 2) : 0;
   const scale = Math.min(1, (MAX_DIM - extra) / w, (MAX_DIM - extra - ringRows) / h);
   return { w: Math.max(1, Math.floor(w * scale)), h: Math.max(1, Math.floor(h * scale)) };
 }
@@ -131,7 +131,7 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
 
   const palette = [0];
   let plateIndex = 0;
-  if (plate > 0 || o.keyring) {
+  if (plate > 0 || o.hasKeyring) {
     palette.push(o.plateColor);
     plateIndex = 1;
   }
@@ -171,7 +171,7 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
 
   let ring: { cx: number; cy: number } | null = null;
   let H = baseH;
-  if (o.keyring) {
+  if (o.hasKeyring) {
     const cx = Math.floor(W / 2);
     let top = -1;
     for (let gy = baseH - 1; gy >= 0 && top < 0; gy--) if (footprint[gy * W + cx]) top = gy;
@@ -210,8 +210,8 @@ export function imageToModel(rgba: Uint8ClampedArray | Uint8Array, w: number, h:
     for (let gy = 0; gy < H; gy++)
       for (let gx = 0; gx < W; gx++) {
         const d = Math.hypot(gx + 0.5 - ring.cx, gy + 0.5 - ring.cy);
-        const inHole = d < RING_INNER;
-        if (inHole) {
+        const isInHole = d < RING_INNER;
+        if (isInHole) {
           for (let z = 0; z < D; z++) grid.set(gx, gy, z, 0);
         } else if (d <= RING_OUTER) {
           for (let z = 0; z < ringTop; z++) if (!grid.get(gx, gy, z)) grid.set(gx, gy, z, plateIndex);

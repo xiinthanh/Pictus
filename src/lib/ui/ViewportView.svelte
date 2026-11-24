@@ -17,7 +17,7 @@
 
   $effect(() => {
     void dims;
-    view?.setLayer(app.layerMode ? Math.min(app.layer, editor.grid.sz - 1) : null);
+    view?.setLayer(app.isLayerMode ? Math.min(app.layer, editor.grid.sz - 1) : null);
   });
   $effect(() => {
     void dims;

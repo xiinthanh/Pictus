@@ -19,11 +19,11 @@ import { app, editor } from '$lib/state/app.svelte';
 
 /** Asks to save unsaved changes. Resolves false if the user cancels. */
 export async function confirmDiscard(): Promise<boolean> {
-  if (!app.dirty) return true;
+  if (!app.isDirty) return true;
   const choice = await app.ask('Unsaved changes', `Save changes to “${app.docName}” first?`, [
     { id: 'cancel', label: 'Cancel' },
     { id: 'discard', label: "Don't save" },
-    { id: 'save', label: 'Save', primary: true },
+    { id: 'save', label: 'Save', isPrimary: true },
   ]);
   if (choice === 'cancel') return false;
   if (choice === 'save') return save();
@@ -34,7 +34,7 @@ function loadModel(model: Model, path: string | null, name: string) {
   editor.load(model);
   app.filePath = path;
   app.docName = name;
-  app.dirty = false;
+  app.isDirty = false;
 }
 
 export function newModel(sx: number, sy: number, sz: number) {
@@ -53,8 +53,8 @@ export function loadImported(model: Model, name: string) {
   app.color = Math.min(app.color, model.palette.length - 1) || 1;
 }
 
-export async function openFile(path?: string, confirmed = false): Promise<void> {
-  if (!confirmed && !(await confirmDiscard())) return;
+export async function openFile(path?: string, isConfirmed = false): Promise<void> {
+  if (!isConfirmed && !(await confirmDiscard())) return;
   const p = path ?? (await pickOpen([{ name: 'Models', extensions: ['pictus', 'vox'] }, PICTUS_FILTER, VOX_FILTER]));
   if (!p) return;
   try {
@@ -73,7 +73,7 @@ export async function openFile(path?: string, confirmed = false): Promise<void> 
     }
   } catch (e) {
     if (path) app.removeRecent(path);
-    await app.ask('Could not open file', errorText(e), [{ id: 'ok', label: 'OK', primary: true }]);
+    await app.ask('Could not open file', errorText(e), [{ id: 'ok', label: 'OK', isPrimary: true }]);
   }
 }
 
@@ -93,12 +93,12 @@ async function writeModel(path: string): Promise<boolean> {
     await writeBytes(path, encodePictus(editor.model()));
     app.filePath = path;
     app.docName = stripExt(baseName(path));
-    app.dirty = false;
+    app.isDirty = false;
     app.addRecent(path);
     app.flash(`Saved ${baseName(path)}`);
     return true;
   } catch (e) {
-    await app.ask('Could not save', errorText(e), [{ id: 'ok', label: 'OK', primary: true }]);
+    await app.ask('Could not save', errorText(e), [{ id: 'ok', label: 'OK', isPrimary: true }]);
     return false;
   }
 }
@@ -116,7 +116,7 @@ export async function exportVox(): Promise<void> {
     await writeBytes(withExt(p, '.vox'), writeVox(editor.model()));
     app.flash(`Exported ${baseName(withExt(p, '.vox'))}`);
   } catch (e) {
-    await app.ask('Could not export', errorText(e), [{ id: 'ok', label: 'OK', primary: true }]);
+    await app.ask('Could not export', errorText(e), [{ id: 'ok', label: 'OK', isPrimary: true }]);
   }
 }
 

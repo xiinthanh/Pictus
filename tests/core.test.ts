@@ -68,13 +68,13 @@ describe('tools', () => {
   const g = new VoxelGrid(5, 4, 3);
 
   it('mirrors across enabled axes without duplicates', () => {
-    expect(mirrorCells(g, [[0, 0, 0]], { x: true, y: false, z: false })).toEqual([
+    expect(mirrorCells(g, [[0, 0, 0]], { isX: true, isY: false, isZ: false })).toEqual([
       [0, 0, 0],
       [4, 0, 0],
     ]);
-    expect(mirrorCells(g, [[0, 0, 0]], { x: true, y: true, z: true })).toHaveLength(8);
+    expect(mirrorCells(g, [[0, 0, 0]], { isX: true, isY: true, isZ: true })).toHaveLength(8);
     // Center column maps onto itself.
-    expect(mirrorCells(g, [[2, 0, 0]], { x: true, y: false, z: false })).toEqual([[2, 0, 0]]);
+    expect(mirrorCells(g, [[2, 0, 0]], { isX: true, isY: false, isZ: false })).toEqual([[2, 0, 0]]);
   });
 
   it('flood fills a same-color region', () => {

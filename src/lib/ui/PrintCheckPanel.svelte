@@ -7,7 +7,7 @@
   let report = $state<PrintReport>(analyze(editor.grid));
   let checkedRev = $state(app.rev);
   let shown = $state<string | null>(null);
-  const stale = $derived(app.rev !== checkedRev);
+  const isStale = $derived(app.rev !== checkedRev);
 
   function recheck() {
     report = analyze(editor.grid);
@@ -71,7 +71,7 @@
 
   function close() {
     app.highlight = [];
-    app.checkOpen = false;
+    app.isCheckOpen = false;
   }
 </script>
 
@@ -82,7 +82,7 @@
     <button class="icon" onclick={close} title="Close" aria-label="Close"><Icon name="close" size={16} /></button>
   </div>
 
-  {#if stale}
+  {#if isStale}
     <div class="stale row">The model changed. <button onclick={recheck}>Check again</button></div>
   {/if}
 

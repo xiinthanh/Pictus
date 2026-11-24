@@ -30,7 +30,7 @@ export class VoxelGrid {
     return [this.sx, this.sy, this.sz];
   }
 
-  inBounds(x: number, y: number, z: number): boolean {
+  isInBounds(x: number, y: number, z: number): boolean {
     return x >= 0 && y >= 0 && z >= 0 && x < this.sx && y < this.sy && z < this.sz;
   }
 
@@ -47,11 +47,11 @@ export class VoxelGrid {
 
   /** Value at a cell; out-of-bounds cells read as empty. */
   get(x: number, y: number, z: number): number {
-    return this.inBounds(x, y, z) ? this.data[this.index(x, y, z)] : 0;
+    return this.isInBounds(x, y, z) ? this.data[this.index(x, y, z)] : 0;
   }
 
   set(x: number, y: number, z: number, v: number): void {
-    if (this.inBounds(x, y, z)) this.data[this.index(x, y, z)] = v;
+    if (this.isInBounds(x, y, z)) this.data[this.index(x, y, z)] = v;
   }
 
   count(): number {

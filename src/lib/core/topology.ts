@@ -109,12 +109,12 @@ export function vertexSheets(vx: number, vy: number, vz: number, solidAt: SolidF
         shifted(solidCells[0], delta) &&
         shifted(solidCells[1], delta) &&
         (shifted(emptyCells[0], delta) || shifted(emptyCells[1], delta));
-      const bySolid = !(connected(nearDelta) && connected(farDelta));
+      const isBySolid = !(connected(nearDelta) && connected(farDelta));
       for (let i = 0; i < 4; i++)
         for (let j = i + 1; j < 4; j++) {
           const fi = faces[i],
             fj = faces[j];
-          if (bySolid ? faceOwner[fi] === faceOwner[fj] : faceOut[fi] === faceOut[fj]) union(fi, fj);
+          if (isBySolid ? faceOwner[fi] === faceOwner[fj] : faceOut[fi] === faceOut[fj]) union(fi, fj);
         }
     }
   }

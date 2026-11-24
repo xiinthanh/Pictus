@@ -44,8 +44,8 @@ export class Viewport {
   private mirrorPlanes = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   private drag: Drag | null = null;
-  private orbitHeld = false;
-  private frameRequested = false;
+  private isOrbitHeld = false;
+  private isFrameRequested = false;
   private disposers: (() => void)[] = [];
 
   constructor(private container: HTMLElement) {
@@ -252,7 +252,7 @@ export class Viewport {
     this.requestRender();
   }
 
-  setMirror(m: { x: boolean; y: boolean; z: boolean }) {
+  setMirror(m: { isX: boolean; isY: boolean; isZ: boolean }) {
     this.mirrorPlanes.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
@@ -271,9 +271,9 @@ export class Viewport {
       p.rotation.set(...rot);
       this.mirrorPlanes.add(p);
     };
-    if (m.x) add(g.sz, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, Math.PI / 2, 0]);
-    if (m.y) add(g.sx, g.sz, [g.sx / 2, g.sy / 2, g.sz / 2], [Math.PI / 2, 0, 0]);
-    if (m.z) add(g.sx, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, 0, 0]);
+    if (m.isX) add(g.sz, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, Math.PI / 2, 0]);
+    if (m.isY) add(g.sx, g.sz, [g.sx / 2, g.sy / 2, g.sz / 2], [Math.PI / 2, 0, 0]);
+    if (m.isZ) add(g.sx, g.sy, [g.sx / 2, g.sy / 2, g.sz / 2], [0, 0, 0]);
     this.requestRender();
   }
 
@@ -413,10 +413,10 @@ export class Viewport {
   }
 
   requestRender() {
-    if (this.frameRequested) return;
-    this.frameRequested = true;
+    if (this.isFrameRequested) return;
+    this.isFrameRequested = true;
     requestAnimationFrame(() => {
-      this.frameRequested = false;
+      this.isFrameRequested = false;
       if (this.dirtyChunks.size) this.flushChunks();
       this.renderer.render(this.scene, this.camera);
     });
@@ -439,9 +439,9 @@ export class Viewport {
 
   /**
    * Cell on the plane `axis = coord` under the pointer (plane through cell centers).
-   * With `clamp`, positions outside the grid snap to its border; otherwise they return null.
+   * With `shouldClamp`, positions outside the grid snap to its border; otherwise they return null.
    */
-  private planeCell(e: PointerEvent, axis: number, coord: number, clamp: boolean): Vec3 | null {
+  private planeCell(e: PointerEvent, axis: number, coord: number, shouldClamp: boolean): Vec3 | null {
     const { o, d } = this.ray(e);
     const t = rayPlane(o, d, axis, coord + 0.5);
     if (t === null) return null;
@@ -450,7 +450,7 @@ export class Viewport {
     const dims = [g.sx, g.sy, g.sz];
     for (let k = 0; k < 3; k++) {
       if (c[k] < 0 || c[k] >= dims[k]) {
-        if (!clamp) return null;
+        if (!shouldClamp) return null;
         c[k] = Math.max(0, Math.min(dims[k] - 1, c[k]));
       }
     }
@@ -458,7 +458,7 @@ export class Viewport {
   }
 
   private onDown(e: PointerEvent) {
-    if (e.button !== 0 || this.orbitHeld) return;
+    if (e.button !== 0 || this.isOrbitHeld) return;
     const hit = this.hit(e);
     const tool = app.tool;
     this.renderer.domElement.setPointerCapture(e.pointerId);
@@ -515,10 +515,10 @@ export class Viewport {
       this.showTarget(c);
       return;
     }
-    const hit = this.orbitHeld ? null : this.hit(e);
+    const hit = this.isOrbitHeld ? null : this.hit(e);
     if (drag?.kind === 'stroke' && hit?.cell) editCells([hit.cell], drag.mode);
-    const placing = app.tool === 'place' || (app.tool === 'box' && app.boxMode === 'add');
-    this.showTarget(hit ? (placing ? hit.place : hit.cell) : null);
+    const isPlacing = app.tool === 'place' || (app.tool === 'box' && app.boxMode === 'add');
+    this.showTarget(hit ? (isPlacing ? hit.place : hit.cell) : null);
   }
 
   private onUp(e: PointerEvent) {
@@ -574,20 +574,20 @@ export class Viewport {
     this.requestRender();
   }
 
-  private setOrbitHeld(held: boolean) {
-    if (held === this.orbitHeld) return;
-    this.orbitHeld = held;
-    this.controls.mouseButtons.LEFT = held ? THREE.MOUSE.ROTATE : null;
-    this.renderer.domElement.style.cursor = held ? 'grab' : '';
-    if (held) this.showTarget(null);
+  private setOrbitHeld(isHeld: boolean) {
+    if (isHeld === this.isOrbitHeld) return;
+    this.isOrbitHeld = isHeld;
+    this.controls.mouseButtons.LEFT = isHeld ? THREE.MOUSE.ROTATE : null;
+    this.renderer.domElement.style.cursor = isHeld ? 'grab' : '';
+    if (isHeld) this.showTarget(null);
   }
 
-  private onKey(e: KeyboardEvent, down: boolean) {
+  private onKey(e: KeyboardEvent, isDown: boolean) {
     const target = e.target as HTMLElement | null;
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
     if (e.code === 'Space' || e.key === 'Alt') {
       if (e.code === 'Space' || e.key === 'Alt') e.preventDefault();
-      if (!this.drag) this.setOrbitHeld(down);
+      if (!this.drag) this.setOrbitHeld(isDown);
     }
   }
 }

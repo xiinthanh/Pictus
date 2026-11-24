@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { MIRROR_AXES } from '$lib/core/tools';
   import { app, editor, TOOLS } from '$lib/state/app.svelte';
   import Icon from './Icon.svelte';
 
@@ -39,14 +40,14 @@
   <div class="group">
     <h3>Mirror</h3>
     <div class="seg">
-      {#each ['x', 'y', 'z'] as const as axis (axis)}
+      {#each MIRROR_AXES as [axis, key] (axis)}
         <button
-          class:active={app.mirror[axis]}
-          aria-pressed={app.mirror[axis]}
-          title="Mirror edits across the {axis.toUpperCase()} center"
-          onclick={() => (app.mirror = { ...app.mirror, [axis]: !app.mirror[axis] })}
+          class:active={app.mirror[key]}
+          aria-pressed={app.mirror[key]}
+          title="Mirror edits across the {axis} center"
+          onclick={() => (app.mirror = { ...app.mirror, [key]: !app.mirror[key] })}
         >
-          {axis.toUpperCase()}
+          {axis}
         </button>
       {/each}
     </div>
@@ -56,14 +57,14 @@
     <h3>Layer view</h3>
     <button
       class="wide"
-      class:active={app.layerMode}
-      aria-pressed={app.layerMode}
-      onclick={() => (app.layerMode = !app.layerMode)}
+      class:active={app.isLayerMode}
+      aria-pressed={app.isLayerMode}
+      onclick={() => (app.isLayerMode = !app.isLayerMode)}
       title="Edit one layer at a time like 2D pixel art (L)"
     >
-      <span class="row"><Icon name="layers" size={16} /> {app.layerMode ? 'On' : 'Off'}</span>
+      <span class="row"><Icon name="layers" size={16} /> {app.isLayerMode ? 'On' : 'Off'}</span>
     </button>
-    {#if app.layerMode}
+    {#if app.isLayerMode}
       <div class="row layer">
         <button
           onclick={() => (app.layer = Math.max(0, app.layer - 1))}
