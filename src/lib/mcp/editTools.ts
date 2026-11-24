@@ -58,7 +58,11 @@ function edit(ctx: ToolCtx, change: () => void): number {
   }
   const step = editor.history.lastUndo;
   const isNewStep = step !== null && step !== before;
-  if (isNewStep) aiSteps.push(step);
+  if (isNewStep) {
+    aiSteps.push(step);
+    // A print_check highlight marks problems in the old model; left on, it would show fixed problems.
+    ctx.highlight([]);
+  }
   forgetDroppedSteps(ctx);
   return isNewStep ? step.idx.length : 0;
 }
@@ -236,6 +240,7 @@ const undo: Tool = {
     }
     // The step stays in aiSteps while it sits on the redo stack, so a Ctrl+Y makes it the AI's again.
     editor.undo();
+    ctx.highlight([]);
     return [text(`Undid the last AI edit (${top.idx.length} cells).`)];
   },
 };

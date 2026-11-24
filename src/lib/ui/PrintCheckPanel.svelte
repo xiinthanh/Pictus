@@ -15,10 +15,20 @@
     show(null, []);
   }
 
+  /** The highlight this panel last set; any other value was set elsewhere (e.g. by the AI). */
+  let ownHighlight: Vec3[] | null = null;
+
   function show(id: string | null, cells: Vec3[]) {
     shown = id;
     app.highlight = cells;
+    // Read back: the state stores its own proxy of `cells`, which is what later reads return.
+    ownHighlight = app.highlight;
   }
+
+  // Someone else replaced the highlight, so none of this panel's "Show" buttons is on any more.
+  $effect(() => {
+    if (app.highlight !== ownHighlight) shown = null;
+  });
 
   function toggle(id: string, cells: () => Vec3[]) {
     if (shown === id) show(null, []);

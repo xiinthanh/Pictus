@@ -170,3 +170,27 @@ describe('snapshot', () => {
     await expect(run('snapshot', {}, makeCtx(CUBE, [6, 6, 3], null))).rejects.toThrow(/minimized or hidden/);
   });
 });
+
+describe('highlight after AI edits', () => {
+  it('clears the print_check highlight once an edit changes cells', async () => {
+    const ctx = makeCtx(DIAGONAL);
+    await run('print_check', {}, ctx);
+    await run('fix_thin_contacts', {}, ctx);
+    expect(ctx.highlighted.at(-1)).toEqual([]);
+  });
+
+  it('keeps the highlight when an edit changes nothing', async () => {
+    const ctx = makeCtx(DIAGONAL);
+    await run('print_check', {}, ctx);
+    await run('set_voxels', { voxels: [[0, 0, 0, 0]] }, ctx);
+    expect(ctx.highlighted).toHaveLength(1);
+  });
+
+  it('clears the highlight when the AI undoes an edit', async () => {
+    const ctx = makeCtx(CUBE);
+    await run('set_voxels', { voxels: [[5, 5, 2, 1]] }, ctx);
+    await run('print_check', {}, ctx);
+    await run('undo', {}, ctx);
+    expect(ctx.highlighted.at(-1)).toEqual([]);
+  });
+});
