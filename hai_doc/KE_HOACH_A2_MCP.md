@@ -11,13 +11,23 @@ Mục tiêu của bản kế hoạch: liệt kê rõ file nào tạo hoặc sử
 ```
 Claude Code ──HTTP POST /mcp──▶ Rust (tiny_http, 127.0.0.1)
                                   │ kiểm tra Origin, token, kích thước
-                                  │ emit "mcp-request" {id, body}
+                                  │ emit "mcp-request" {id, body, protocolVersion, method, name}
                                   ▼
                          Giao diện TS: bridge.ts → protocol.ts → tools.ts → Editor
-                                  │ invoke("mcp_respond", {id, body})
+                                  │ invoke("mcp_respond", {id, status, body})
                                   ▼
 Claude Code ◀──JSON trả lời────── Rust
 ```
+
+## Điều chỉnh khi làm M1 (24/11/2026)
+
+Khi đối chiếu đặc tả MCP hiện hành, tôi phát hiện bản **2026-07-28** đã thay đổi lớn: bỏ bước bắt tay `initialize`, mỗi yêu cầu tự mang phiên bản trong `params._meta`, bắt buộc có `server/discover`, và các header `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` phải khớp với nội dung (sai thì trả 400, lỗi `-32020`). Vì vậy:
+
+1. **Server hỗ trợ cả hai thời kỳ ("dual-era")**: client mới dùng 2026-07-28, client cũ dùng `initialize` với 2025-03-26 / 2025-06-18 / 2025-11-25. Nhờ vậy Claude Code bản nào cũng kết nối được.
+2. **Rust chuyển thêm 3 header trên sang TS**, còn TS quyết định luôn mã HTTP (200 / 202 / 400 / 404). Rust vẫn chỉ trung chuyển, logic vẫn test được bằng vitest.
+3. **Thêm cách bật nhanh khi phát triển**: `VITE_PICTUS_MCP_TOKEN=<token ≥32 ký tự> pnpm tauri dev` tự bật kết nối với token đó. Chỉ có tác dụng ở chế độ dev, bản cài đặt không có.
+4. **File trong `src/lib/mcp/` import bằng đường dẫn tương đối** (`../core/...`), không dùng `$lib`, vì vitest không hiểu `$lib`. Riêng `bridge.ts` được dùng `$lib` vì nó nối với app.
+5. **Test giao thức viết luôn ở M1** (`tests/mcp.test.ts`), không đợi đến M6.
 
 ---
 

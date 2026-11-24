@@ -4,7 +4,7 @@ import type { Mirror } from '$lib/core/tools';
 
 export type ToolId = 'place' | 'erase' | 'paint' | 'pick' | 'fill' | 'box';
 export type BoxMode = 'add' | 'erase' | 'paint';
-export type DialogId = 'new' | 'export' | 'image' | null;
+export type DialogId = 'new' | 'export' | 'image' | 'ai' | null;
 
 export const TOOLS: { id: ToolId; label: string; key: string; hint: string }[] = [
   { id: 'place', label: 'Place', key: '1', hint: 'Click a face to add a voxel. Drag to keep placing on the same layer.' },
@@ -54,6 +54,8 @@ class AppState {
   /** Cells to highlight in the viewport (print check). */
   highlight = $state<Vec3[]>([]);
   confirm = $state<ConfirmRequest | null>(null);
+  /** The local MCP endpoint for AI clients is running. */
+  mcpOn = $state(false);
   recent = $state<string[]>(loadRecent());
 
   addRecent(path: string) {

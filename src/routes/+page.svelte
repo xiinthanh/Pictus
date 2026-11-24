@@ -3,6 +3,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { confirmDiscard, importImageWithConfirm, newWithConfirm, openFile, save, saveAs } from '$lib/actions';
   import { redo, undo } from '$lib/editing';
+  import { startFromSettings } from '$lib/mcp/bridge';
   import { startupFile } from '$lib/platform/files';
   import { app, editor, TOOLS } from '$lib/state/app.svelte';
   import ConfirmDialog from '$lib/ui/ConfirmDialog.svelte';
@@ -42,6 +43,7 @@
     startupFile().then((p) => {
       if (p) openFile(p, true);
     });
+    startFromSettings();
     return () => unlisten?.();
   });
 
