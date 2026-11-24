@@ -13,6 +13,8 @@ export type Content = { type: 'text'; text: string } | { type: 'image'; data: st
 export interface AppInfo {
   name: string;
   isDirty: boolean;
+  /** A dialog, file picker or save is in progress; edits now could be lost or overwritten. */
+  isBusy: boolean;
   isLayerMode: boolean;
   layer: number;
   color: number;

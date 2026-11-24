@@ -1,5 +1,5 @@
 // MCP tools that change the model. Each call is exactly one undo step, is
-// refused while the user is mid-drag, and validates every argument before
+// refused while the user is mid-drag or Pictus is busy, and validates every argument before
 // touching the model, so a rejected call changes nothing.
 import { MAX_DIM, type VoxelGrid } from '../core/grid';
 import { MAX_COLORS, toCss } from '../core/palette';
@@ -11,8 +11,16 @@ import type { Tool, ToolCtx } from './tools';
 export const MAX_VOXELS_PER_CALL = 20_000;
 const UNDO_HINT = 'The user can undo it with Ctrl+Z; you can with the undo tool.';
 
-function refuseWhileDrawing(ctx: ToolCtx): void {
+/**
+ * Edits must wait while the user draws (they'd merge into the user's stroke) and
+ * while a dialog, file picker or save is open (a save could mark them as saved
+ * without writing them, or an open/new could replace them without asking).
+ */
+function refuseWhileBusy(ctx: ToolCtx): void {
   if (ctx.editor.isInStroke) throw new Error('The user is drawing in Pictus right now. Retry in a moment.');
+  if (ctx.info().isBusy) {
+    throw new Error('Pictus is busy (a dialog, file picker or save is open). Retry once the user has finished.');
+  }
 }
 
 /**
@@ -27,7 +35,7 @@ function forgetDroppedSteps(ctx: ToolCtx): void {
 
 /** Runs `change` as one undo step and remembers that step as the AI's. Returns the number of cells changed. */
 function edit(ctx: ToolCtx, change: () => number): number {
-  refuseWhileDrawing(ctx);
+  refuseWhileBusy(ctx);
   const { editor, aiSteps } = ctx;
   const before = editor.history.lastUndo;
   editor.beginStroke();
@@ -128,7 +136,7 @@ const newModel: Tool = {
   },
   run: (args, ctx) => {
     const [sx, sy, sz] = ['sx', 'sy', 'sz'].map((k) => intArg(args, k, 1, MAX_DIM));
-    refuseWhileDrawing(ctx);
+    refuseWhileBusy(ctx);
     if (ctx.info().isDirty) {
       throw new Error('The open model has unsaved changes. Ask the user to save or discard them first.');
     }
@@ -157,7 +165,7 @@ const setColor: Tool = {
     const { editor } = ctx;
     const color = hexArg(args, 'hex');
     const index = args.index === undefined ? null : intValue(args.index, 'index', 1, editor.palette.length - 1);
-    refuseWhileDrawing(ctx);
+    refuseWhileBusy(ctx);
     if (index !== null) {
       editor.setColor(index, color);
       return [text(`Color ${index} is now ${toCss(color)}.`)];
@@ -176,7 +184,7 @@ const undo: Tool = {
     'latest step is theirs, it refuses.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   run: (_args, ctx) => {
-    refuseWhileDrawing(ctx);
+    refuseWhileBusy(ctx);
     forgetDroppedSteps(ctx);
     const { editor, aiSteps } = ctx;
     const top = editor.history.lastUndo;

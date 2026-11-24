@@ -7,11 +7,11 @@ import { handleHttp } from '../src/lib/mcp/protocol';
 import { TOOLS, type ToolCtx } from '../src/lib/mcp/tools';
 
 /** 4 × 3 × 2 empty grid with the default palette (colors 1..16). */
-function makeCtx(isDirty = false): ToolCtx {
+function makeCtx(isDirty = false, isBusy = false): ToolCtx {
   const editor = new Editor({ grid: new VoxelGrid(4, 3, 2), palette: defaultPalette(), voxelSize: 1 });
   return {
     editor,
-    info: () => ({ name: 'Untitled', isDirty, isLayerMode: false, layer: 0, color: 1 }),
+    info: () => ({ name: 'Untitled', isDirty, isBusy, isLayerMode: false, layer: 0, color: 1 }),
     newModel: (sx, sy, sz) => editor.load({ grid: new VoxelGrid(sx, sy, sz), palette: defaultPalette(), voxelSize: 1 }),
     aiSteps: [],
     notify: () => undefined,
@@ -262,5 +262,25 @@ describe('edit tools over MCP', () => {
     });
     const r = await handleHttp({ body }, TOOLS, makeCtx());
     expect(JSON.parse(r.body).result).toMatchObject({ isError: true });
+  });
+});
+
+describe('while Pictus is busy (dialog open, choosing a file, saving)', () => {
+  it.each([
+    ['set_voxels', { voxels: [[0, 0, 0, 1]] }],
+    ['fill_box', { from: [0, 0, 0], to: [1, 1, 1], color: 1 }],
+    ['new_model', { sx: 2, sy: 2, sz: 2 }],
+    ['set_color', { hex: '#000000' }],
+    ['undo', {}],
+  ])('refuses %s and changes nothing', async (name, args) => {
+    const ctx = makeCtx(false, true);
+    const palette = ctx.editor.palette.slice();
+    await expect(run(name, args, ctx)).rejects.toThrow(/Pictus is busy/);
+    expect([filled(ctx), ctx.editor.palette, ctx.editor.grid.dims]).toEqual([0, palette, [4, 3, 2]]);
+  });
+
+  it('still answers read-only tools', async () => {
+    const out = await run('get_model', {}, makeCtx(false, true));
+    expect(JSON.parse(out).voxelCount).toBe(0);
   });
 });

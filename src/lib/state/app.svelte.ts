@@ -56,6 +56,8 @@ class AppState {
   /** Cells to highlight in the viewport (print check). */
   highlight = $state<Vec3[]>([]);
   confirm = $state<ConfirmRequest | null>(null);
+  /** Open/save/import flows in progress; AI edits wait until it is back to 0. */
+  busyTasks = $state(0);
   recent = $state<string[]>(loadSetting(RECENT_KEY, parseRecent, []));
 
   addRecent(path: string) {

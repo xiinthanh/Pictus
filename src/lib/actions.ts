@@ -17,6 +17,19 @@ import {
 } from '$lib/platform/files';
 import { app, editor } from '$lib/state/app.svelte';
 
+/**
+ * Marks Pictus busy while a file flow runs. AI edits are refused meanwhile, so
+ * none can land between a check (unsaved changes?) and its effect (load, save).
+ */
+async function whileBusy<T>(flow: () => Promise<T>): Promise<T> {
+  app.busyTasks++;
+  try {
+    return await flow();
+  } finally {
+    app.busyTasks--;
+  }
+}
+
 /** Asks to save unsaved changes. Resolves false if the user cancels. */
 export async function confirmDiscard(): Promise<boolean> {
   if (!app.isDirty) return true;
@@ -53,7 +66,11 @@ export function loadImported(model: Model, name: string) {
   app.color = Math.min(app.color, model.palette.length - 1) || 1;
 }
 
-export async function openFile(path?: string, isConfirmed = false): Promise<void> {
+export function openFile(path?: string, isConfirmed = false): Promise<void> {
+  return whileBusy(() => openFileFlow(path, isConfirmed));
+}
+
+async function openFileFlow(path: string | undefined, isConfirmed: boolean): Promise<void> {
   if (!isConfirmed && !(await confirmDiscard())) return;
   const p = path ?? (await pickOpen([{ name: 'Models', extensions: ['pictus', 'vox'] }, PICTUS_FILTER, VOX_FILTER]));
   if (!p) return;
@@ -77,12 +94,20 @@ export async function openFile(path?: string, isConfirmed = false): Promise<void
   }
 }
 
-export async function save(): Promise<boolean> {
+export function save(): Promise<boolean> {
+  return whileBusy(saveFlow);
+}
+
+async function saveFlow(): Promise<boolean> {
   if (!app.filePath) return saveAs();
   return writeModel(app.filePath);
 }
 
-export async function saveAs(): Promise<boolean> {
+export function saveAs(): Promise<boolean> {
+  return whileBusy(saveAsFlow);
+}
+
+async function saveAsFlow(): Promise<boolean> {
   const p = await pickSave([PICTUS_FILTER], `${app.docName}.pictus`);
   if (!p) return false;
   return writeModel(withExt(p, '.pictus'));
@@ -103,13 +128,21 @@ async function writeModel(path: string): Promise<boolean> {
   }
 }
 
-export async function importVox(): Promise<void> {
+export function importVox(): Promise<void> {
+  return whileBusy(importVoxFlow);
+}
+
+async function importVoxFlow(): Promise<void> {
   if (!(await confirmDiscard())) return;
   const p = await pickOpen([VOX_FILTER]);
   if (p) await openFile(p, true);
 }
 
-export async function exportVox(): Promise<void> {
+export function exportVox(): Promise<void> {
+  return whileBusy(exportVoxFlow);
+}
+
+async function exportVoxFlow(): Promise<void> {
   const p = await pickSave([VOX_FILTER], `${app.docName}.vox`);
   if (!p) return;
   try {

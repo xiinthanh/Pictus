@@ -20,6 +20,7 @@ const ctx: ToolCtx = {
   info: () => ({
     name: app.docName,
     isDirty: app.isDirty,
+    isBusy: app.dialog !== null || app.confirm !== null || app.busyTasks > 0,
     isLayerMode: app.isLayerMode,
     layer: app.layer,
     color: app.color,

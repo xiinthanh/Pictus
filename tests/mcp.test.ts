@@ -18,7 +18,7 @@ const META = {
   'io.modelcontextprotocol/clientInfo': { name: 't', version: '1' },
 };
 
-const INFO: AppInfo = { name: 'Untitled', isDirty: false, isLayerMode: false, layer: 0, color: 1 };
+const INFO: AppInfo = { name: 'Untitled', isDirty: false, isBusy: false, isLayerMode: false, layer: 0, color: 1 };
 
 function makeCtx(editor = new Editor(), info = INFO): ToolCtx & { notified: string[] } {
   const notified: string[] = [];
@@ -283,7 +283,7 @@ describe('MCP tool get_model', () => {
   });
 
   it('includes the editor state from the app', async () => {
-    const info: AppInfo = { name: 'boat.pictus', isDirty: true, isLayerMode: false, layer: 5, color: 3 };
+    const info: AppInfo = { name: 'boat.pictus', isDirty: true, isBusy: false, isLayerMode: false, layer: 5, color: 3 };
     const m = JSON.parse(await runText('get_model', {}, makeCtx(smallEditor(), info)));
     expect(m).toMatchObject({ name: 'boat.pictus', hasUnsavedChanges: true, currentColor: 3 });
   });
