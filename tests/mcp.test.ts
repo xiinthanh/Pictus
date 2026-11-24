@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Editor } from '../src/lib/core/editor';
+import { VoxelGrid } from '../src/lib/core/grid';
+import { defaultPalette } from '../src/lib/core/palette';
 import { handleHttp, decodeHeader, LEGACY_VERSIONS, START_MARGIN_MS, type HttpIn } from '../src/lib/mcp/protocol';
-import type { Tool, ToolCtx } from '../src/lib/mcp/tools';
+import { TOOLS, type AppInfo, type Tool, type ToolCtx } from '../src/lib/mcp/tools';
 
 const V = '2026-07-28';
 const META = {
@@ -9,11 +11,14 @@ const META = {
   'io.modelcontextprotocol/clientInfo': { name: 't', version: '1' },
 };
 
-function makeCtx(editor = new Editor()): ToolCtx & { notified: string[] } {
+const INFO: AppInfo = { name: 'Untitled', isDirty: false, layer: 0, color: 1 };
+
+function makeCtx(editor = new Editor(), info = INFO): ToolCtx & { notified: string[] } {
   const notified: string[] = [];
   return {
     editor,
     notified,
+    info: () => info,
     notify: (t) => notified.push(t),
   };
 }
@@ -211,5 +216,89 @@ describe('MCP protocol (malformed)', () => {
     ['keeps a missing header as null', null, null],
   ])('decodeHeader %s', (_case, input, expected) => {
     expect(decodeHeader(input)).toBe(expected);
+  });
+});
+
+function tool(name: string): Tool {
+  const t = TOOLS.find((x) => x.name === name);
+  if (!t) throw new Error(`Tool ${name} is not registered`);
+  return t;
+}
+
+/** A 3 × 2 × 2 model: (0,0,0)=1, (2,1,0)=4, (1,0,1)=255. */
+function smallEditor(): Editor {
+  const grid = new VoxelGrid(3, 2, 2);
+  grid.set(0, 0, 0, 1);
+  grid.set(2, 1, 0, 4);
+  grid.set(1, 0, 1, 255);
+  return new Editor({ grid, palette: defaultPalette(), voxelSize: 2 });
+}
+
+async function runText(name: string, args: Record<string, unknown>, ctx: ToolCtx): Promise<string> {
+  const [first] = await tool(name).run(args, ctx);
+  if (first.type !== 'text') throw new Error(`${name} returned ${first.type}, expected text`);
+  return first.text;
+}
+
+describe('MCP tools (registry)', () => {
+  it('registers get_model and get_layer', () => {
+    expect(TOOLS.map((t) => t.name)).toEqual(['get_model', 'get_layer']);
+  });
+});
+
+describe('MCP tool get_model', () => {
+  it('reports size, voxel count and voxel size', async () => {
+    const m = JSON.parse(await runText('get_model', {}, makeCtx(smallEditor())));
+    expect(m).toMatchObject({ size: { x: 3, y: 2, z: 2 }, voxelCount: 3, voxelSizeMm: 2 });
+  });
+
+  it('lists the palette from index 1 as #rrggbb', async () => {
+    const m = JSON.parse(await runText('get_model', {}, makeCtx(smallEditor())));
+    expect(m.palette).toHaveLength(defaultPalette().length - 1);
+    expect(m.palette[0]).toEqual({ index: 1, hex: '#f5f5f5' });
+  });
+
+  it('includes the editor state from the app', async () => {
+    const info: AppInfo = { name: 'boat.pictus', isDirty: true, layer: 5, color: 3 };
+    const m = JSON.parse(await runText('get_model', {}, makeCtx(smallEditor(), info)));
+    expect(m).toMatchObject({ name: 'boat.pictus', hasUnsavedChanges: true, currentLayer: 5, currentColor: 3 });
+  });
+
+  it('reports zero voxels for an empty model', async () => {
+    const m = JSON.parse(await runText('get_model', {}, makeCtx()));
+    expect(m.voxelCount).toBe(0);
+  });
+});
+
+describe('MCP tool get_layer', () => {
+  it('prints rows from the highest y down, two hex digits per cell', async () => {
+    const out = await runText('get_layer', { z: 0 }, makeCtx(smallEditor()));
+    expect(out.split('\n')).toEqual(['Layer z=0 (3 × 2):', 'y=1: 000004', 'y=0: 010000']);
+  });
+
+  it('prints color 255 as ff', async () => {
+    const out = await runText('get_layer', { z: 1 }, makeCtx(smallEditor()));
+    expect(out.split('\n')[2]).toBe('y=0: 00ff00');
+  });
+
+  it.each([
+    ['a negative z', -1],
+    ['z past the top layer', 2],
+    ['a fractional z', 0.5],
+    ['z as a string', '0'],
+    ['a missing z', undefined],
+  ])('rejects %s with the valid range', async (_case, z) => {
+    await expect(runText('get_layer', { z }, makeCtx(smallEditor()))).rejects.toThrow(
+      /'z' must be a whole number from 0 to 1/,
+    );
+  });
+
+  it('reports a bad z as an isError result over MCP', async () => {
+    const req = modern('tools/call', { name: 'get_layer', arguments: { z: 99 } });
+    const r = await handleHttp(req, TOOLS, makeCtx(smallEditor()));
+    expect(JSON.parse(r.body).result).toMatchObject({
+      isError: true,
+      content: [{ text: expect.stringContaining('0 to 1') }],
+    });
   });
 });
