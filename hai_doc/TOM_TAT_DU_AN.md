@@ -65,6 +65,8 @@ Pictus/
 **Công cụ vẽ** (phím 1–6): Đặt, Xoá, Tô màu, Hút màu, Tô loang, Hộp (kéo chữ nhật để thêm/xoá/tô nhiều khối).
 Kèm đối xứng X/Y/Z, Ctrl+Z / Ctrl+Y.
 
+**Thanh công cụ kéo thả:** kéo tay nắm ⋮⋮ để gắn vào cạnh Trái / Phải / Trên / Dưới (Trên, Dưới thì xếp ngang) hoặc thả ở giữa cho nổi. Có chế độ chỉ icon; nhấp đúp tay nắm để về mặc định (cạnh trên); vị trí được nhớ sau khi tắt app. Chi tiết: `hai_doc/KE_HOACH_TOOLBAR_KEO_THA.md`.
+
 **Chế độ lớp (phím L):** khung 2D vẽ từng lớp Z, lớp dưới hiện mờ; trong 3D ẩn các lớp phía trên. PgUp/PgDn đổi lớp.
 
 **Chuột trong 3D:** trái = dùng công cụ, phải = xoay, giữa = kéo, cuộn = thu phóng, F = căn khung nhìn.

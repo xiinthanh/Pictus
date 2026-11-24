@@ -15,6 +15,9 @@
     frame: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
     plus: 'M12 5v14M5 12h14',
     close: 'M6 6l12 12M18 6L6 18',
+    grip: 'M8.5 6h1M8.5 12h1M8.5 18h1M14.5 6h1M14.5 12h1M14.5 18h1',
+    collapse: 'M15 6l-6 6 6 6',
+    expand: 'M9 6l6 6-6 6',
   };
 </script>
 

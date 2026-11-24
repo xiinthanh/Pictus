@@ -2,6 +2,7 @@ import { Editor } from '$lib/core/editor';
 import type { Vec3 } from '$lib/core/grid';
 import type { Mirror } from '$lib/core/tools';
 import { loadSetting, saveSetting } from '$lib/platform/storage';
+import { DEFAULT_TOOLBAR_PREFS, parseToolbarPrefs, TOOLBAR_PREFS_KEY, type ToolbarPrefs } from '$lib/ui/toolbarLayout';
 
 export type ToolId = 'place' | 'erase' | 'paint' | 'pick' | 'fill' | 'box';
 export type BoxMode = 'add' | 'erase' | 'paint';
@@ -61,6 +62,14 @@ class AppState {
   /** The AI (MCP) connection is listening for Claude Code. */
   isMcpOn = $state(false);
   recent = $state<string[]>(loadSetting(RECENT_KEY, parseRecent, []));
+  toolbar = $state<ToolbarPrefs>(loadSetting(TOOLBAR_PREFS_KEY, parseToolbarPrefs, { ...DEFAULT_TOOLBAR_PREFS }));
+
+  /** The layout still applies for this session if it can't be saved, so a warning is enough. */
+  setToolbar(next: ToolbarPrefs) {
+    this.toolbar = next;
+    const failure = saveSetting(TOOLBAR_PREFS_KEY, next);
+    if (failure) console.warn(`Pictus: could not save the toolbar layout: ${failure}`);
+  }
 
   addRecent(path: string) {
     this.recent = [path, ...this.recent.filter((p) => p.toLowerCase() !== path.toLowerCase())].slice(0, 8);
