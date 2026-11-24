@@ -299,10 +299,18 @@ mod tests {
     }
 
     #[test]
-    fn authorize_rejects_missing_or_wrong_tokens() {
+    fn authorize_rejects_a_missing_token() {
+        assert_eq!(authorize(None, None, &token()), Err(401));
+    }
+
+    #[test]
+    fn authorize_rejects_a_wrong_token() {
+        assert_eq!(authorize(None, Some("Bearer wrong"), &token()), Err(401));
+    }
+
+    #[test]
+    fn authorize_rejects_a_token_without_the_bearer_prefix() {
         let t = token();
-        assert_eq!(authorize(None, None, &t), Err(401));
-        assert_eq!(authorize(None, Some("Bearer wrong"), &t), Err(401));
         assert_eq!(authorize(None, Some(&t), &t), Err(401));
     }
 

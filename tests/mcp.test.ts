@@ -61,17 +61,24 @@ describe('MCP protocol (modern)', () => {
     expect(msg.result._meta['io.modelcontextprotocol/serverInfo'].name).toBe('pictus');
   });
 
-  it('lists and calls tools', async () => {
+  it('lists the tools', async () => {
     const list = await call(modern('tools/list'));
     expect(list.msg.result.tools.map((t: Tool) => t.name)).toEqual(['echo']);
-    const ctx = makeCtx();
-    const r = await call(modern('tools/call', { name: 'echo', arguments: { text: 'hi' } }), ctx);
+  });
+
+  it('calls a tool and returns its content', async () => {
+    const r = await call(modern('tools/call', { name: 'echo', arguments: { text: 'hi' } }));
     expect(r.status).toBe(200);
     expect(r.msg.result).toMatchObject({
       resultType: 'complete',
       isError: false,
       content: [{ type: 'text', text: 'hi' }],
     });
+  });
+
+  it('tells the user which tool ran', async () => {
+    const ctx = makeCtx();
+    await call(modern('tools/call', { name: 'echo', arguments: { text: 'hi' } }), ctx);
     expect(ctx.notified).toEqual(['echo']);
   });
 
@@ -82,22 +89,34 @@ describe('MCP protocol (modern)', () => {
     expect(r.msg.result.content[0].text).toBe('bad text');
   });
 
-  it('rejects unknown tools, methods and versions', async () => {
+  it('rejects an unknown tool', async () => {
     expect((await call(modern('tools/call', { name: 'nope' }))).msg.error.code).toBe(-32602);
+  });
+
+  it('answers an unknown method with 404', async () => {
     const m = await call(modern('resources/list'));
     expect([m.status, m.msg.error.code]).toEqual([404, -32601]);
+  });
+
+  it('rejects an unsupported version and lists the supported ones', async () => {
     const req = modern('ping');
     const v = await call({ ...req, body: req.body.replace(V, '1900-01-01'), protocolVersion: '1900-01-01' });
     expect([v.status, v.msg.error.code]).toEqual([400, -32022]);
     expect(v.msg.error.data).toEqual({ supported: [V], requested: '1900-01-01' });
   });
 
-  it('rejects headers that do not match the body', async () => {
-    const base = modern('tools/call', { name: 'echo', arguments: {} });
-    for (const bad of [{ protocolVersion: null }, { method: 'tools/list' }, { name: 'other' }]) {
-      const r = await call({ ...base, ...bad });
-      expect([r.status, r.msg.error.code]).toEqual([400, -32020]);
-    }
+  const base = modern('tools/call', { name: 'echo', arguments: {} });
+
+  it.each([
+    ['a missing version header', { protocolVersion: null }],
+    ['a different method header', { method: 'tools/list' }],
+    ['a different name header', { name: 'other' }],
+  ])('rejects %s', async (_case, bad) => {
+    const r = await call({ ...base, ...bad });
+    expect([r.status, r.msg.error.code]).toEqual([400, -32020]);
+  });
+
+  it('accepts a base64-encoded name header', async () => {
     expect((await call({ ...base, name: '=?base64?ZWNobw==?=' })).status).toBe(200);
   });
 
@@ -107,7 +126,7 @@ describe('MCP protocol (modern)', () => {
 });
 
 describe('MCP protocol (legacy)', () => {
-  it('negotiates initialize', async () => {
+  it('initializes with the version the client asked for', async () => {
     const r = await call(
       legacy('initialize', {
         protocolVersion: '2025-06-18',
@@ -117,15 +136,24 @@ describe('MCP protocol (legacy)', () => {
     );
     expect(r.msg.result.protocolVersion).toBe('2025-06-18');
     expect(r.msg.result.serverInfo.name).toBe('pictus');
+  });
+
+  it('falls back to the newest legacy version for an unknown one', async () => {
     const newer = await call(legacy('initialize', { protocolVersion: '2099-01-01' }));
     expect(newer.msg.result.protocolVersion).toBe(LEGACY_VERSIONS[0]);
   });
 
-  it('serves tools without _meta and accepts notifications', async () => {
+  it('serves tools without _meta or resultType', async () => {
     const r = await call(legacy('tools/call', { name: 'echo', arguments: { text: 'x' } }));
     expect(r.msg.result.content[0].text).toBe('x');
     expect(r.msg.result.resultType).toBeUndefined();
+  });
+
+  it('accepts notifications with 202', async () => {
     expect((await call(legacy('notifications/initialized', {}, null))).status).toBe(202);
+  });
+
+  it('answers an unknown method with 200, as older clients expect', async () => {
     const unknown = await call(legacy('nope'));
     expect([unknown.status, unknown.msg.error.code]).toEqual([200, -32601]);
   });
@@ -165,15 +193,23 @@ describe('MCP protocol (internal errors)', () => {
 });
 
 describe('MCP protocol (malformed)', () => {
-  it('rejects bad JSON and non-requests', async () => {
+  it('rejects invalid JSON', async () => {
     expect((await call({ body: '{' })).msg.error.code).toBe(-32700);
+  });
+
+  it('rejects a body that is not a request object', async () => {
     expect((await call({ body: '[]' })).msg.error.code).toBe(-32600);
+  });
+
+  it('rejects a request without a method, keeping its id', async () => {
     expect((await call({ body: '{"jsonrpc":"2.0","id":3}' })).msg).toMatchObject({ id: 3, error: { code: -32600 } });
   });
 
-  it('decodes base64 header values', () => {
-    expect(decodeHeader('=?base64?SGVsbG8sIOS4lueVjA==?=')).toBe('Hello, 世界');
-    expect(decodeHeader('plain')).toBe('plain');
-    expect(decodeHeader(null)).toBeNull();
+  it.each([
+    ['decodes a base64 value', '=?base64?SGVsbG8sIOS4lueVjA==?=', 'Hello, 世界'],
+    ['passes a plain value through', 'plain', 'plain'],
+    ['keeps a missing header as null', null, null],
+  ])('decodeHeader %s', (_case, input, expected) => {
+    expect(decodeHeader(input)).toBe(expected);
   });
 });
