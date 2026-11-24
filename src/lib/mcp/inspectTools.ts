@@ -19,21 +19,27 @@ function describePart(grid: VoxelGrid, part: Part) {
   const min: Vec3 = [Infinity, Infinity, Infinity];
   const max: Vec3 = [-Infinity, -Infinity, -Infinity];
   for (const i of part.indices) {
-    const c = grid.coords(i);
-    for (let k = 0; k < 3; k++) {
-      min[k] = Math.min(min[k], c[k]);
-      max[k] = Math.max(max[k], c[k]);
-    }
+    grid.coords(i).forEach((v, axis) => {
+      min[axis] = Math.min(min[axis], v);
+      max[axis] = Math.max(max[axis], v);
+    });
   }
   return { voxels: part.size, min, max, sampleCell: grid.coords(part.indices[0]) };
 }
 
-/** Cells of the loose parts and thin contacts, for the 3D highlight. */
+/** Indices of every loose-part cell, then every cell at a thin contact. */
+function* problemIndices(grid: VoxelGrid, report: PrintReport): Generator<number> {
+  for (const part of report.parts.slice(1)) yield* part.indices;
+  for (const v of report.contacts) for (const [x, y, z] of cellsAtVertex(grid, v)) yield grid.index(x, y, z);
+}
+
+/** Problem cells for the 3D highlight; stops reading once the cap is reached. */
 function problemCells(grid: VoxelGrid, report: PrintReport): Vec3[] {
   const seen = new Set<number>();
-  const add = (i: number) => seen.size < MAX_HIGHLIGHT_CELLS && seen.add(i);
-  for (const part of report.parts.slice(1)) for (const i of part.indices) add(i);
-  for (const v of report.contacts) for (const [x, y, z] of cellsAtVertex(grid, v)) add(grid.index(x, y, z));
+  for (const i of problemIndices(grid, report)) {
+    if (seen.size >= MAX_HIGHLIGHT_CELLS) break;
+    seen.add(i);
+  }
   return Array.from(seen, (i) => grid.coords(i));
 }
 
@@ -63,7 +69,8 @@ const printCheck: Tool = {
       thinContacts: report.contacts.slice(0, MAX_LISTED).map((v) => ({ vertex: v, cells: cellsAtVertex(grid, v) })),
     };
     if (isHighlighting) ctx.highlight(problemCells(grid, report));
-    return [text(JSON.stringify(result, null, 2))];
+    // Compact: indented, every coordinate number would take its own line (and tokens).
+    return [text(JSON.stringify(result))];
   },
 };
 

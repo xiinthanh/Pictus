@@ -216,3 +216,20 @@ describe('snapshot in layer view', () => {
     expect(await run('snapshot', {}, makeCtx(CUBE))).toHaveLength(1);
   });
 });
+
+describe('print_check size limits', () => {
+  it('answers in compact JSON to save tokens', async () => {
+    const [first] = await run('print_check', {}, makeCtx(DIAGONAL));
+    expect(first.type === 'text' && first.text.includes('\n')).toBe(false);
+  });
+
+  it('highlights at most 20,000 cells of a huge loose part', async () => {
+    // Main body: z 0–9 (25,000 cells). Loose part above the gap: z 11–19 (22,500 cells).
+    const cells: Vec3[] = [];
+    for (let x = 0; x < 50; x++)
+      for (let y = 0; y < 50; y++) for (let z = 0; z < 20; z++) if (z !== 10) cells.push([x, y, z]);
+    const ctx = makeCtx(cells, { size: [50, 50, 20] });
+    await run('print_check', {}, ctx);
+    expect(ctx.highlighted[0]).toHaveLength(20_000);
+  });
+});

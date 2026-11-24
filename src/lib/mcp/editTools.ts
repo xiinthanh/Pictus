@@ -157,7 +157,7 @@ const fixContacts: Tool = {
   run: (_args, ctx) => {
     const { changes, remaining } = fixThinContacts(ctx.editor.grid);
     const added = edit(ctx, () => ctx.editor.apply(changes));
-    const left = remaining ? ` ${remaining} contacts at the grid edge could not be fixed.` : '';
+    const left = remaining ? ` ${remaining} contacts could not be fixed automatically (often at the grid edge).` : '';
     return [text(`Added ${added} voxels to thicken thin contacts.${left}${undoHint(added)}`)];
   },
 };
